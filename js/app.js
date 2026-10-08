@@ -51,7 +51,7 @@ const svg = (d, size = 22, sw = 2) =>
 const I = {
   back: svg('<path d="M15 6l-6 6 6 6"/>'),
   close: svg('<path d="M6 6l12 12M18 6L6 18"/>'),
-  skip: svg('<path d="M6 6l7 6-7 6M17 6v12"/>'),
+  list: svg('<path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/>'),
   check: svg('<path d="M5 12.5l4.5 4.5L19 7.5"/>', 30, 3),
   chevron: svg('<path d="M9 6l6 6-6 6"/>', 18),
   plus: svg('<path d="M12 5v14M5 12h14"/>', 24, 3),
@@ -60,6 +60,7 @@ const I = {
   run: svg('<circle cx="14" cy="4.5" r="1.5"/><path d="M8 21l3-6 3 2v4M7 12l3-4h4l2 3 3 1M10 8l1 7"/>', 24),
   chart: svg('<path d="M4 19h16M5 15l4-4 4 3 6-7"/>', 24),
   search: svg('<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/>', 18),
+  grip: svg('<circle cx="9" cy="6" r="1.4"/><circle cx="15" cy="6" r="1.4"/><circle cx="9" cy="12" r="1.4"/><circle cx="15" cy="12" r="1.4"/><circle cx="9" cy="18" r="1.4"/><circle cx="15" cy="18" r="1.4"/>', 22),
 };
 
 function arrow(dir) {
@@ -88,7 +89,7 @@ function findExByName(name) {
 // Every logged session of one exercise, oldest first.
 function exSessions(exId) {
   const out = [];
-  for (const s of S.sessions) for (const e of s.entries) if (e.exId === exId) out.push({ date: s.date, programId: s.programId, sets: e.sets });
+  for (const s of S.sessions) for (const e of s.entries) if (e.exId === exId) out.push({ id: s.id, date: s.date, programId: s.programId, sets: e.sets });
   return out.sort((a, b) => a.date.localeCompare(b.date));
 }
 
@@ -323,7 +324,7 @@ function vTrain() {
   const a = S.active;
   const it = a.items[a.ex];
   const t = targetFor(it.exId, it);
-  const logs = a.logs[a.ex] || [];
+  const logs = a.logs[it.k] || [];
   const prev = exSessions(it.exId).at(-1);
   const bars = Array.from({ length: Math.max(it.sets, logs.length) }, (_, i) =>
     i < logs.length ? (logs[i].hit ? 'hit' : 'missed') : i === logs.length ? 'now' : '');
@@ -331,8 +332,8 @@ function vTrain() {
   return `
     <div class="spread" style="align-items:center">
       <button class="iconbtn" data-act="endWorkout" aria-label="End workout">${I.close}</button>
-      <div class="small">Exercise ${a.ex + 1} of ${a.items.length}</div>
-      <button class="iconbtn" data-act="skipEx" aria-label="Skip exercise">${I.skip}</button>
+      <button class="linkbtn" data-act="pickEx" style="color:var(--muted);font-weight:500">Exercise ${a.ex + 1} of ${a.items.length}</button>
+      <button class="iconbtn" data-act="pickEx" aria-label="Choose which exercise to do next">${I.list}</button>
     </div>
     <div class="stack4">
       <h1>${esc(exName(it.exId))}</h1>
@@ -343,40 +344,89 @@ function vTrain() {
       <div class="eyebrow">Set ${logs.length + 1} of ${it.sets}</div>
       <div class="setnum"><span class="n">${t.reps}</span><span class="x">×</span><span class="n">${fmtW(t.weight)}</span></div>
       <div class="setlabels"><span>reps</span><span>${t.weight ? 'kg' : 'bodyweight'}</span></div>
-      ${logs.length ? `<div class="small" style="margin-top:12px">Done: ${esc(setsText(logs))}</div>` : ''}
+      ${logs.length ? `<button class="linkbtn" data-act="editActive" data-k="${it.k}" style="margin-top:8px;color:var(--muted);font-weight:500">Done: ${esc(setsText(logs))} · <span class="lift">&nbsp;Edit</span></button>` : ''}
     </div>
     <div class="actions">
-      <button class="btn-miss" data-act="missed">Missed</button>
+      <button class="btn-miss" data-act="missed">Different</button>
       <button class="btn-done" data-act="done">${I.check}Done</button>
     </div>
     ${a.hist.length ? '<button class="linkbtn" data-act="undo">Undo last set</button>' : ''}`;
 }
 
+// Logs are keyed by each item's `k` (not its position) so skipped exercises can move to the end.
+function sQueue() {
+  const a = S.active;
+  return `
+    <div class="stack4"><h2>What's next?</h2><div class="sub">Tap any exercise to do it now. Sets you've done are kept.</div></div>
+    <div class="stack">${a.items.map((it, i) => {
+      const done = (a.logs[it.k] || []).length;
+      const status = `${done}/${it.sets} sets`;
+      if (i < a.ex) {
+        return `<button class="row" data-act="editActive" data-k="${it.k}"><span class="name muted">${esc(exName(it.exId))}</span><span class="hrow small" style="gap:6px"><span class="lift">${svg('<path d="M5 12.5l4.5 4.5L19 7.5"/>', 18, 3)}</span>Done · edit</span></button>`;
+      }
+      if (i === a.ex) {
+        return `<div class="row" style="box-shadow: inset 0 0 0 2px ${LIME}"><span class="name">${esc(exName(it.exId))}</span><span class="small lift">Now · ${status}</span></div>`;
+      }
+      return `<button class="row" data-act="jumpEx" data-i="${i}"><span class="name">${esc(exName(it.exId))}</span><span class="small">${status}</span></button>`;
+    }).join('')}</div>
+    <button class="btn btn-ghost" data-act="closeSheet">Keep going with ${esc(exName(a.items[a.ex].exId))}</button>`;
+}
+
+// Edit logged sets: used during a workout and for past sessions.
+// ui.es = { title, sub, sets: [{reps, weight}], step, save(sets) }
+function sEditSets() {
+  const es = ui.es;
+  const mini = (i, f, v) => `
+    <div class="mini">
+      <button type="button" data-act="esStep" data-i="${i}" data-f="${f}" data-d="-1" aria-label="Less ${f}">−</button>
+      <span>${f === 'weight' ? fmtW(v) : v}</span>
+      <button type="button" data-act="esStep" data-i="${i}" data-f="${f}" data-d="1" aria-label="More ${f}">+</button>
+    </div>`;
+  return `
+    <div class="stack4"><h2>${esc(es.title)}</h2><div class="sub">${esc(es.sub)}</div></div>
+    <div class="setedit small"><span></span><span class="center">Reps</span><span class="center">kg</span><span></span></div>
+    <div class="stack">${es.sets.map((s, i) => `
+      <div class="setedit"><span class="small">${i + 1}</span>${mini(i, 'reps', s.reps)}${mini(i, 'weight', s.weight)}
+        <button class="iconbtn" data-act="esDel" data-i="${i}" aria-label="Delete set ${i + 1}">${I.close}</button></div>`).join('')}
+      ${es.sets.length ? '' : '<div class="empty">No sets. Saving removes this exercise from the session.</div>'}
+    </div>
+    <button class="btn btn-ghost btn-small" data-act="esAdd">+ Add a set</button>
+    <button class="btn btn-primary" data-act="esSave">Save changes</button>`;
+}
+
+function openSetEditor(title, sub, sets, step, onSave) {
+  ui.es = { title, sub, sets: sets.map((s) => ({ ...s })), step, save: onSave };
+  openSheet(sEditSets);
+}
+
 function logSet(set) {
   const a = S.active;
-  (a.logs[a.ex] = a.logs[a.ex] || []).push(set);
-  a.hist.push(a.ex);
-  if (a.logs[a.ex].length >= a.items[a.ex].sets) a.ex++;
+  const it = a.items[a.ex];
+  (a.logs[it.k] = a.logs[it.k] || []).push(set);
+  a.hist.push(it.k);
+  if (a.logs[it.k].length >= it.sets) a.ex++;
   if (a.ex >= a.items.length) return finishWorkout();
   save();
   render(true);
 }
 
+const vsCls = (v, target) => (v > target ? 'lift' : v < target ? 'missc' : '');
+
 function sMissed() {
   const m = ui.miss;
   return `
     <div class="stack4"><h2>What did you get?</h2><div class="sub">Target was ${m.t.reps} × ${fmtW(m.t.weight)}${m.t.weight ? ' kg' : ''}</div></div>
-    <div class="stack"><div class="eyebrow">Reps</div>${stepper('mstep', 'reps', m.reps, 'reps', m.reps < m.t.reps ? 'missc' : '')}</div>
-    <div class="stack"><div class="eyebrow">Weight (kg)</div>${stepper('mstep', 'weight', fmtW(m.weight), 'weight', m.weight < m.t.weight ? 'missc' : '')}</div>
-    <div class="small">Next time's target is built from what you actually did.</div>
+    <div class="stack"><div class="eyebrow">Reps</div>${stepper('mstep', 'reps', m.reps, 'reps', vsCls(m.reps, m.t.reps))}</div>
+    <div class="stack"><div class="eyebrow">Weight (kg)</div>${stepper('mstep', 'weight', fmtW(m.weight), 'weight', vsCls(m.weight, m.t.weight))}</div>
+    <div class="small">More or less than the target — next time's target is built from what you actually did.</div>
     <button class="btn btn-primary" data-act="saveMissed">Save set</button>`;
 }
 
 function finishWorkout() {
   const a = S.active;
   const entries = [];
-  a.items.forEach((it, i) => {
-    const sets = a.logs[i];
+  a.items.forEach((it) => {
+    const sets = a.logs[it.k];
     if (sets && sets.length) entries.push({ exId: it.exId, cfg: { sets: it.sets, min: it.min, max: it.max }, target: targetFor(it.exId, it), sets });
   });
   S.active = null;
@@ -443,13 +493,14 @@ function vWeek() {
       <button class="btn btn-ghost" data-act="go" data-to="programs">Programs & Archive</button>`;
   }
   return `
-    <div class="stack4"><h1>My week</h1><div class="sub">${esc(p.name)} · ${esc(weekLabel(p))} · tap a day to change it</div></div>
-    <div class="stack">${DAYS.map((k) => {
+    <div class="stack4"><h1>My week</h1><div class="sub">${esc(p.name)} · ${esc(weekLabel(p))} · tap a day to change it, drag ⠿ onto another day to swap</div></div>
+    <div class="stack" data-sortable="days" data-mode="swap">${DAYS.map((k, i) => {
       const d = p.days[k] || {};
       const w = d.workout && p.workouts[d.workout];
       const tags = (w ? `<span class="tag lift">${esc(w.name)}</span>` : '') + (d.run ? `<span class="tag run">${RUN[d.run]}</span>` : '');
-      return `<button class="row ${tags ? '' : 'dashed'} ${k === todayKey() ? 'today' : ''}" data-act="daySheet" data-day="${k}" style="justify-content:flex-start">
-        <span class="dayname">${k.toUpperCase()}</span>${tags ? `<span class="tags">${tags}</span>` : '<span class="small">Rest · tap to add</span>'}</button>`;
+      return `<button class="row ${tags ? '' : 'dashed'} ${k === todayKey() ? 'today' : ''}" data-idx="${i}" data-act="daySheet" data-day="${k}" style="justify-content:flex-start">
+        <span class="dayname">${k.toUpperCase()}</span>${tags ? `<span class="tags">${tags}</span>` : '<span class="small grow">Rest · tap to add</span>'}
+        <span class="handle" data-handle aria-label="Drag onto another day to swap">${I.grip}</span></button>`;
     }).join('')}</div>
     <div class="grid2">
       <button class="btn btn-ghost" data-act="go" data-to="programs">Programs</button>
@@ -497,11 +548,13 @@ function vWorkout(params) {
   return `
     <div class="hrow">${backBtn('week')}<div class="small">${esc(used)}</div></div>
     <label class="field">Workout name<input class="input" data-change="wname" data-id="${w.id}" value="${esc(w.name)}" style="font-family:var(--cond);font-size:26px;font-weight:700"></label>
-    <div class="stack">${w.items.length
+    ${w.items.length > 1 ? '<div class="small" style="margin-bottom:-8px">Drag ⠿ to reorder · tap to edit</div>' : ''}
+    <div class="stack" data-sortable="ex" data-wid="${w.id}">${w.items.length
       ? w.items.map((it, i) => {
           const t = targetFor(it.exId, it);
-          return `<button class="row" data-act="itemSheet" data-wid="${w.id}" data-i="${i}">
-            <span class="name">${esc(exName(it.exId))}</span>
+          return `<button class="row" data-idx="${i}" data-act="itemSheet" data-wid="${w.id}" data-i="${i}">
+            ${w.items.length > 1 ? `<span class="handle" data-handle aria-label="Drag to reorder">${I.grip}</span>` : ''}
+            <span class="name grow">${esc(exName(it.exId))}</span>
             <span class="small" style="white-space:nowrap">${it.sets} × ${it.min}–${it.max} · ${fmtW(t.weight)}${t.weight ? ' kg' : ''}</span></button>`;
         }).join('')
       : '<div class="empty">No exercises yet. Add the first one below.</div>'}</div>
@@ -616,14 +669,17 @@ function sRun() {
   const r = S.runs.find((x) => x.id === ui.runId);
   if (!r) return '<h2>Run not found</h2>';
   return `
-    <div class="stack4"><h2>${RUN[r.type]}</h2><div class="sub">${esc(L.fmtDate(r.date, { weekday: 'long', year: 'numeric' }))}</div></div>
-    <div class="grid3">
-      <div class="stack4"><div class="small">Distance</div><div class="cond" style="font-size:30px">${L.fmtKm(r.distKm)} km</div></div>
-      <div class="stack4"><div class="small">Time</div><div class="cond" style="font-size:30px">${L.fmtDuration(r.timeSec)}</div></div>
-      <div class="stack4"><div class="small">Pace</div><div class="cond" style="font-size:30px">${L.fmtDuration(L.paceOf(r))}</div></div>
-    </div>
-    <button class="btn btn-danger btn-small" data-act="delRun">Delete this run</button>
-    <button class="btn btn-ghost" data-act="closeSheet">Close</button>`;
+    <div class="stack4"><h2>Edit run</h2><div class="sub">Pace is worked out from distance and time.</div></div>
+    <form class="stack" data-submit="saveRunEdit" style="gap:14px" autocomplete="off">
+      <div class="seg run">${RUN_TYPES.map((t) => `<button type="button" data-act="runEditType" data-v="${t}" aria-pressed="${r.type === t}">${RUN_SHORT[t]}</button>`).join('')}</div>
+      <div class="grid2">
+        <label class="field">Distance (km)<input class="input num" name="dist" inputmode="decimal" value="${L.fmtKm(r.distKm)}"></label>
+        <label class="field">Time<input class="input num" name="time" inputmode="decimal" value="${L.fmtDuration(r.timeSec)}"></label>
+      </div>
+      <label class="field">Date<input class="input" type="date" name="date" value="${r.date}" max="${today()}"></label>
+      <button class="btn btn-run" type="submit">Save changes</button>
+    </form>
+    <button class="btn btn-danger btn-small" data-act="delRun">Delete this run</button>`;
 }
 
 // ---------- progress ----------
@@ -713,8 +769,8 @@ function vExercise(params) {
       <div class="cond" style="font-size:30px">${ya.reps} × ${fmtW(ya.weight)} → <span class="lift">${now.reps} × ${fmtW(now.weight)}</span></div></div>`;
   }
 
-  h += `<div class="stack4"><div class="eyebrow">Recent sessions</div>${ss.slice(-10).reverse().map((s) => `
-    <div class="line-item"><span class="small">${esc(L.fmtDate(s.date, { weekday: 'short' }))}</span><span>${esc(setsText(s.sets))}</span></div>`).join('')}</div>`;
+  h += `<div class="stack4"><div class="spread"><span class="eyebrow">Recent sessions</span><span class="small">tap to fix a mistake</span></div>${ss.slice(-10).reverse().map((s) => `
+    <button class="line-item" data-act="editSession" data-sid="${s.id}" data-ex="${ex.id}"><span class="small">${esc(L.fmtDate(s.date, { weekday: 'short' }))}</span><span>${esc(setsText(s.sets))}</span></button>`).join('')}</div>`;
   return h;
 }
 
@@ -1017,7 +1073,7 @@ const A = {
   start(d) {
     const p = cur();
     const w = p.workouts[d.id];
-    S.active = { programId: p.id, workoutId: w.id, workoutName: w.name, date: today(), started: Date.now(), items: w.items.map((i) => ({ ...i })), ex: 0, logs: {}, hist: [] };
+    S.active = { programId: p.id, workoutId: w.id, workoutName: w.name, date: today(), started: Date.now(), items: w.items.map((i, k) => ({ ...i, k })), ex: 0, logs: {}, hist: [] };
     save();
     wake(true);
     go('train');
@@ -1030,7 +1086,7 @@ const A = {
   missed() {
     const it = S.active.items[S.active.ex];
     const t = targetFor(it.exId, it);
-    ui.miss = { reps: Math.max(0, t.reps - 1), weight: t.weight, step: exStep(it.exId), t };
+    ui.miss = { reps: t.reps, weight: t.weight, step: exStep(it.exId), t };
     openSheet(sMissed);
   },
   mstep(d) {
@@ -1046,17 +1102,72 @@ const A = {
   },
   undo() {
     const a = S.active;
-    const ex = a.hist.pop();
-    a.logs[ex].pop();
-    a.ex = ex;
+    const k = a.hist.pop();
+    a.logs[k].pop();
+    a.ex = a.items.findIndex((i) => i.k === k);
     save();
     render(true);
   },
-  skipEx() {
+  editActive(d) {
     const a = S.active;
-    a.ex++;
-    if (a.ex >= a.items.length) return finishWorkout();
+    const it = a.items.find((x) => String(x.k) === d.k);
+    const t = targetFor(it.exId, it);
+    openSetEditor(exName(it.exId), `Target ${t.reps} × ${fmtW(t.weight)}${t.weight ? ' kg' : ''}`, a.logs[it.k] || [], exStep(it.exId), (sets) => {
+      a.logs[it.k] = sets.map((s) => ({ ...s, hit: s.reps >= t.reps && s.weight >= t.weight }));
+      a.hist = a.hist.filter((k) => k !== it.k).concat(sets.map(() => it.k));
+      // a finished exercise that now has sets missing comes back as the current one
+      const i = a.items.indexOf(it);
+      if (i < a.ex && sets.length < it.sets) {
+        a.items.splice(i, 1);
+        a.items.splice(a.ex - 1, 0, it);
+        a.ex--;
+      }
+      if (i === a.ex && sets.length >= it.sets) a.ex++;
+      if (a.ex >= a.items.length) return finishWorkout();
+    });
+  },
+  editSession(d) {
+    const s = S.sessions.find((x) => x.id === d.sid);
+    const e = s?.entries.find((x) => x.exId === d.ex);
+    if (!e) return;
+    openSetEditor(exName(e.exId), `${s.workoutName} · ${L.fmtDate(s.date, { weekday: 'short', year: 'numeric' })}`, e.sets, exStep(e.exId), (sets) => {
+      if (sets.length) e.sets = sets.map((x) => ({ ...x, hit: x.reps >= e.target.reps && x.weight >= e.target.weight }));
+      else s.entries = s.entries.filter((x) => x !== e);
+      if (!s.entries.length) S.sessions = S.sessions.filter((x) => x !== s);
+      toast('Saved · next target unchanged (tap Change to adjust)');
+    });
+  },
+  esStep(d) {
+    const s = ui.es.sets[Number(d.i)];
+    if (d.f === 'reps') s.reps = Math.max(0, s.reps + Number(d.d));
+    else s.weight = Math.max(0, L.round(s.weight + Number(d.d) * ui.es.step));
+    renderSheet();
+  },
+  esDel(d) {
+    ui.es.sets.splice(Number(d.i), 1);
+    renderSheet();
+  },
+  esAdd() {
+    const last = ui.es.sets.at(-1) || { reps: 10, weight: 0 };
+    ui.es.sets.push({ reps: last.reps, weight: last.weight });
+    renderSheet();
+  },
+  esSave() {
+    const es = ui.es;
+    closeSheet();
+    es.save(es.sets);
     save();
+    render();
+  },
+
+  // Machine busy? Pick any remaining exercise to do now; sets already done are kept.
+  pickEx: () => openSheet(sQueue),
+  jumpEx(d) {
+    const a = S.active;
+    const [it] = a.items.splice(Number(d.i), 1);
+    a.items.splice(a.ex, 0, it);
+    save();
+    closeSheet();
     render(true);
   },
   endWorkout() {
@@ -1170,6 +1281,12 @@ const A = {
   runSheet(d) {
     ui.runId = d.id;
     openSheet(sRun);
+  },
+  runEditType(d) {
+    const r = S.runs.find((x) => x.id === ui.runId);
+    r.type = d.v;
+    save();
+    renderSheet();
   },
   delRun() {
     if (!confirm('Delete this run?')) return;
@@ -1299,6 +1416,17 @@ const CHG = {
 };
 
 const SUB = {
+  saveRunEdit(form) {
+    const f = form.elements;
+    const r = S.runs.find((x) => x.id === ui.runId);
+    const dist = L.parseKm(f.dist.value), time = L.parseDuration(f.time.value);
+    if (!dist || !time) return toast('Check the distance and time');
+    Object.assign(r, { distKm: dist, timeSec: time, date: f.date.value || r.date });
+    save();
+    closeSheet();
+    toast('Run updated');
+    render();
+  },
   addEx(form) {
     const f = form.elements;
     const name = f.exname.value.trim();
@@ -1345,7 +1473,82 @@ const SUB = {
   },
 };
 
+// ---------- drag to reorder ----------
+// Lists marked data-sortable; items carry data-idx and a [data-handle] grip.
+// data-mode="swap" swaps two items (week days); otherwise the item is moved and the rest slide.
+
+const SORT = {
+  ex(list, from, to) {
+    const items = cur().workouts[list.dataset.wid].items;
+    items.splice(to, 0, items.splice(from, 1)[0]);
+  },
+  days(list, from, to) {
+    const p = cur();
+    const a = DAYS[from], b = DAYS[to];
+    [p.days[a], p.days[b]] = [p.days[b], p.days[a]];
+    toast(`${DAY_LONG[a]} and ${DAY_LONG[b]} swapped`);
+  },
+};
+
+let drag = null;
+document.addEventListener('pointerdown', (e) => {
+  const handle = e.target.closest('[data-handle]');
+  const list = handle?.closest('[data-sortable]');
+  if (!list) return;
+  e.preventDefault();
+  const items = [...list.querySelectorAll(':scope > [data-idx]')];
+  const item = handle.closest('[data-idx]');
+  const rects = items.map((el) => el.getBoundingClientRect());
+  const from = items.indexOf(item);
+  drag = { list, items, item, rects, from, to: from, y: e.clientY, swap: list.dataset.mode === 'swap', pitch: items.length > 1 ? rects[1].top - rects[0].top : rects[0].height };
+  handle.setPointerCapture(e.pointerId);
+  item.classList.add('dragging');
+});
+document.addEventListener('pointermove', (e) => {
+  if (!drag) return;
+  const { items, item, rects, from, swap, pitch } = drag;
+  const dy = e.clientY - drag.y;
+  item.style.transform = `translateY(${dy}px)`;
+  const centre = rects[from].top + rects[from].height / 2 + dy;
+  let to = from;
+  rects.forEach((r, i) => {
+    const mid = r.top + r.height / 2;
+    if (swap) {
+      if (i !== from && centre > r.top && centre < r.bottom) to = i;
+    } else if ((i < from && centre < mid) || (i > from && centre > mid)) {
+      to = i < from ? Math.min(to, i) : Math.max(to, i);
+    }
+  });
+  drag.to = to;
+  items.forEach((el, i) => {
+    if (el === item) return;
+    if (swap) {
+      el.classList.toggle('droptarget', i === to);
+      return;
+    }
+    const shift = from < to && i > from && i <= to ? -pitch : from > to && i < from && i >= to ? pitch : 0;
+    el.style.transform = shift ? `translateY(${shift}px)` : '';
+  });
+});
+function endDrag() {
+  if (!drag) return;
+  const { list, items, from, to } = drag;
+  items.forEach((el) => {
+    el.style.transform = '';
+    el.classList.remove('dragging', 'droptarget');
+  });
+  drag = null;
+  if (from !== to) {
+    SORT[list.dataset.sortable](list, from, to);
+    save();
+    render();
+  }
+}
+document.addEventListener('pointerup', endDrag);
+document.addEventListener('pointercancel', endDrag);
+
 document.addEventListener('click', (e) => {
+  if (e.target.closest('[data-handle]')) return;
   const el = e.target.closest('[data-act]');
   if (!el || el.disabled) return;
   const fn = A[el.dataset.act];
