@@ -16,7 +16,7 @@ Your workouts are stored **only on your phone** — nothing is uploaded. Use **P
 Each exercise has a rep range (e.g. 10–15) and a weight.
 
 - Hit your target on every set → next time is **+1 rep**.
-- Hit the **top of the range** on every set → **weight goes up** one step (2.5 kg by default, changeable per exercise) and reps go back to the bottom of the range.
+- Hit the **top of the range** on every set → **weight goes up** one step (2.5 kg by default — type any amount per exercise, e.g. 0.5 or 1) and reps go back to the bottom of the range.
 - Short of the target once → same target next time. Missed twice in a row → target drops to the reps you actually got, then builds back up.
 - Had to **drop the weight** → next time starts from the lighter weight and builds back up.
 - Most sets **below the bottom of the range** → weight comes down one step.

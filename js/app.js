@@ -11,7 +11,7 @@ const DAY_LONG = { mon: 'Monday', tue: 'Tuesday', wed: 'Wednesday', thu: 'Thursd
 const RUN = { threshold: 'Threshold run', long: 'Long run', easy: 'Easy run' };
 const RUN_SHORT = { threshold: 'Threshold', long: 'Long', easy: 'Easy' };
 const RUN_TYPES = ['threshold', 'long', 'easy'];
-const STEPS = [1, 1.25, 2, 2.5, 5, 10];
+const NUDGE = 0.5; // kg per tap on the weight +/- buttons when logging or editing
 const LIME = '#C6F432', BLUE = '#6CBCFF', ORANGE = '#FF8A3D', GREY = '#9A9DA3';
 
 // ---------- small helpers ----------
@@ -204,10 +204,12 @@ function renderSheet() {
     : '';
 }
 
-const stepper = (act, field, val, label, cls = '') => `
+// The number in the middle is a real input, so any value can be typed as well as nudged.
+// `obj` names the ui object it writes to (ui.miss, ui.tgt).
+const stepper = (act, field, val, label, cls, obj) => `
   <div class="stepper">
     <button type="button" data-act="${act}" data-f="${field}" data-d="-1" aria-label="Less ${label}">−</button>
-    <span class="val ${cls}">${val}</span>
+    <input class="val ${cls || ''}" value="${val}" inputmode="${field === 'reps' ? 'numeric' : 'decimal'}" data-input="typed" data-obj="${obj}" data-f="${field}" aria-label="${label}">
     <button type="button" data-act="${act}" data-f="${field}" data-d="1" aria-label="More ${label}">+</button>
   </div>`;
 
@@ -379,7 +381,7 @@ function sEditSets() {
   const mini = (i, f, v) => `
     <div class="mini">
       <button type="button" data-act="esStep" data-i="${i}" data-f="${f}" data-d="-1" aria-label="Less ${f}">−</button>
-      <span>${f === 'weight' ? fmtW(v) : v}</span>
+      <input value="${v}" inputmode="${f === 'reps' ? 'numeric' : 'decimal'}" data-input="typed" data-obj="es" data-i="${i}" data-f="${f}" aria-label="Set ${i + 1} ${f}">
       <button type="button" data-act="esStep" data-i="${i}" data-f="${f}" data-d="1" aria-label="More ${f}">+</button>
     </div>`;
   return `
@@ -416,8 +418,8 @@ function sMissed() {
   const m = ui.miss;
   return `
     <div class="stack4"><h2>What did you get?</h2><div class="sub">Target was ${m.t.reps} × ${fmtW(m.t.weight)}${m.t.weight ? ' kg' : ''}</div></div>
-    <div class="stack"><div class="eyebrow">Reps</div>${stepper('mstep', 'reps', m.reps, 'reps', vsCls(m.reps, m.t.reps))}</div>
-    <div class="stack"><div class="eyebrow">Weight (kg)</div>${stepper('mstep', 'weight', fmtW(m.weight), 'weight', vsCls(m.weight, m.t.weight))}</div>
+    <div class="stack"><div class="eyebrow">Reps</div>${stepper('mstep', 'reps', m.reps, 'reps', vsCls(m.reps, m.t.reps), 'miss')}</div>
+    <div class="stack"><div class="eyebrow">Weight (kg)</div>${stepper('mstep', 'weight', m.weight, 'weight', vsCls(m.weight, m.t.weight), 'miss')}</div>
     <div class="small">More or less than the target — next time's target is built from what you actually did.</div>
     <button class="btn btn-primary" data-act="saveMissed">Save set</button>`;
 }
@@ -478,8 +480,8 @@ function sTarget() {
   const t = ui.tgt;
   return `
     <div class="stack4"><h2>${esc(exName(t.exId))}</h2><div class="sub">Next target</div></div>
-    <div class="stack"><div class="eyebrow">Reps</div>${stepper('tstep', 'reps', t.reps, 'reps')}</div>
-    <div class="stack"><div class="eyebrow">Weight (kg)</div>${stepper('tstep', 'weight', fmtW(t.weight), 'weight')}</div>
+    <div class="stack"><div class="eyebrow">Reps</div>${stepper('tstep', 'reps', t.reps, 'reps', '', 'tgt')}</div>
+    <div class="stack"><div class="eyebrow">Weight (kg)</div>${stepper('tstep', 'weight', t.weight, 'weight', '', 'tgt')}</div>
     <button class="btn btn-primary" data-act="saveTarget">Save</button>`;
 }
 
@@ -568,7 +570,9 @@ function vWorkout(params) {
         <label class="field">Max reps<input class="input num" name="max" type="number" inputmode="numeric" min="1" max="100" value="15" required></label>
         <label class="field">kg<input class="input num" name="kg" type="text" inputmode="decimal" placeholder="0"></label>
       </div>
-      <div class="small" id="exhint">Weight goes up 2.5 kg at a time. Tap an exercise after adding it to change that.</div>
+      <label class="hrow small" style="justify-content:space-between">When you hit the top of the range, add
+        <span class="hrow" style="gap:8px"><input class="input num" name="step" type="text" inputmode="decimal" value="2.5" style="width:84px;height:46px" aria-label="Weight jump in kg">kg</span></label>
+      <div class="small" id="exhint"></div>
       <button class="btn btn-primary" type="submit" style="height:58px;font-size:24px">Add</button>
     </form>
     <button class="btn btn-danger btn-small" data-act="delWorkout" data-id="${w.id}">Delete this workout</button>`;
@@ -593,7 +597,7 @@ function sItem() {
       <div class="grid3">
         <label class="field">Next kg<input class="input num" name="kg" type="text" inputmode="decimal" value="${t.weight}"></label>
         <label class="field">Next reps<input class="input num" name="reps" type="number" inputmode="numeric" min="1" max="100" value="${t.reps}"></label>
-        <label class="field">Jump (kg)<select class="input num" name="step">${STEPS.map((s) => `<option value="${s}" ${s === ex.step ? 'selected' : ''}>${s}</option>`).join('')}</select></label>
+        <label class="field">Weekly jump (kg)<input class="input num" name="step" type="text" inputmode="decimal" value="${ex.step}"></label>
       </div>
       <button class="btn btn-primary" type="submit" style="height:58px;font-size:24px">Save</button>
     </form>
@@ -1092,7 +1096,7 @@ const A = {
   mstep(d) {
     const m = ui.miss;
     if (d.f === 'reps') m.reps = Math.max(0, m.reps + Number(d.d));
-    else m.weight = Math.max(0, L.round(m.weight + Number(d.d) * m.step));
+    else m.weight = Math.max(0, L.round(m.weight + Number(d.d) * NUDGE));
     renderSheet();
   },
   saveMissed() {
@@ -1140,7 +1144,7 @@ const A = {
   esStep(d) {
     const s = ui.es.sets[Number(d.i)];
     if (d.f === 'reps') s.reps = Math.max(0, s.reps + Number(d.d));
-    else s.weight = Math.max(0, L.round(s.weight + Number(d.d) * ui.es.step));
+    else s.weight = Math.max(0, L.round(s.weight + Number(d.d) * NUDGE));
     renderSheet();
   },
   esDel(d) {
@@ -1191,7 +1195,7 @@ const A = {
   tstep(d) {
     const t = ui.tgt;
     if (d.f === 'reps') t.reps = Math.max(1, t.reps + Number(d.d));
-    else t.weight = Math.max(0, L.round(t.weight + Number(d.d) * t.step));
+    else t.weight = Math.max(0, L.round(t.weight + Number(d.d) * NUDGE));
     renderSheet();
   },
   saveTarget() {
@@ -1338,6 +1342,7 @@ const INP = {
       const t = S.targets[ex.id];
       const cfg = lastConfig(ex.id);
       if (t) f.kg.value = t.weight || '';
+      f.step.value = ex.step;
       if (cfg) {
         f.sets.value = cfg.sets;
         f.min.value = cfg.min;
@@ -1347,8 +1352,15 @@ const INP = {
       hint.textContent = t ? `Done before · picks up at ${t.reps} × ${fmtW(t.weight)}${t.weight ? ' kg' : ''}` : 'Done before';
     } else {
       hint.className = 'small';
-      hint.textContent = 'New exercise. Weight goes up 2.5 kg at a time; tap it after adding to change that.';
+      hint.textContent = '';
     }
+  },
+  // typed straight into a stepper's number (no re-render, so the keyboard stays up)
+  typed(el) {
+    const o = el.dataset.obj;
+    const target = o === 'es' ? ui.es.sets[Number(el.dataset.i)] : ui[o];
+    const v = el.dataset.f === 'reps' ? int(el.value, 0, 999, null) : num(el.value);
+    if (target && v != null) target[el.dataset.f] = v;
   },
   runf(el) {
     const f = ui.runForm;
@@ -1438,9 +1450,12 @@ const SUB = {
     const kg = f.kg.value.trim() === '' ? null : num(f.kg.value);
     let ex = findExByName(name);
     const known = !!ex;
+    const step = num(f.step.value) || 2.5;
     if (!ex) {
-      ex = { id: uid(), name, step: 2.5 };
+      ex = { id: uid(), name, step };
       S.exercises[ex.id] = ex;
+    } else {
+      ex.step = step;
     }
     const t = S.targets[ex.id];
     if (!t) S.targets[ex.id] = { weight: kg || 0, reps: min, miss: 0 };
@@ -1459,7 +1474,7 @@ const SUB = {
     const clash = findExByName(name);
     if (clash && clash.id !== ex.id) return toast('Another exercise already has that name');
     if (name) ex.name = name;
-    ex.step = Number(f.step.value) || 2.5;
+    ex.step = num(f.step.value) || ex.step || 2.5;
     it.sets = int(f.sets.value, 1, 20, it.sets);
     it.min = int(f.min.value, 1, 100, it.min);
     it.max = Math.max(it.min, int(f.max.value, 1, 100, it.max));
@@ -1574,6 +1589,13 @@ document.addEventListener('submit', (e) => {
 // ---------- boot ----------
 
 if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
+// Offline cache on phones only; on localhost it would serve stale files while developing.
+if ('serviceWorker' in navigator) {
+  if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+    navigator.serviceWorker.getRegistrations().then((rs) => rs.forEach((r) => r.unregister()));
+  } else {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+  }
+}
 if (S.active) wake(true);
 render(true);

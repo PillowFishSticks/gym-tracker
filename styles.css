@@ -172,11 +172,17 @@ select.input { appearance: none; -webkit-appearance: none; }
 .setedit { display: grid; grid-template-columns: 24px 1fr 1fr 44px; gap: 8px; align-items: center; }
 .mini { display: flex; align-items: center; justify-content: space-between; background: var(--bg); border-radius: 12px; padding: 4px; }
 .mini button { width: 40px; height: 44px; border: none; border-radius: 10px; background: #23262B; color: var(--text); font-size: 22px; }
-.mini span { font-family: var(--cond); font-size: 26px; font-weight: 700; }
+.mini input { flex: 1; min-width: 0; text-align: center; border: none; background: transparent; color: var(--text); padding: 0; font-family: var(--cond); font-size: 26px; font-weight: 700; }
 
 .stepper { display: flex; align-items: center; justify-content: space-between; background: var(--bg); border-radius: 18px; padding: 8px; }
 .stepper button { width: 72px; height: 72px; border: none; border-radius: 14px; background: #23262B; color: var(--text); font-size: 36px; }
-.stepper .val { font-family: var(--cond); font-size: 60px; font-weight: 700; line-height: 1; }
+.stepper .val {
+  flex: 1; min-width: 0; text-align: center; border: none; background: transparent; color: var(--text);
+  font-family: var(--cond); font-size: 60px; font-weight: 700; line-height: 1; padding: 0;
+}
+.stepper .val.lift { color: var(--lift); }
+.stepper .val.missc { color: var(--miss); }
+.stepper .val:focus, .mini input:focus { outline: 2px solid var(--lift); border-radius: 10px; }
 
 /* ---------- nav ---------- */
 .nav {
