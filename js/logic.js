@@ -55,8 +55,8 @@ export function setTargets(t, cfg) {
   return Array.from({ length: cfg.sets }, (_, i) => clamp(base[Math.min(i, base.length - 1)], 1, cfg.max));
 }
 
-// "12" when every set is the same, otherwise "12/11/10".
-export const repsText = (arr) => (arr.every((r) => r === arr[0]) ? String(arr[0]) : arr.join('/'));
+// "12" when every set is the same, otherwise "12 / 11 / 10".
+export const repsText = (arr) => (arr.every((r) => r === arr[0]) ? String(arr[0]) : arr.join(' / '));
 
 const sum = (arr) => arr.reduce((a, b) => a + b, 0);
 
