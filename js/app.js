@@ -2,7 +2,7 @@ import { load, save as persist, uid, blank } from './store.js';
 import * as L from './logic.js';
 
 let S = load();
-const ui = { day: null, sheet: null, runForm: null, np: null, archiveTab: 'exercises', archiveQ: '', range: '1m' };
+const ui = { day: null, sheet: null, runForm: null, np: null, archiveTab: 'exercises', archiveQ: '', range: '1m', open: {} };
 const $app = document.getElementById('app');
 const $sheet = document.getElementById('sheet');
 
@@ -806,12 +806,29 @@ function vProgress() {
       }).join('')
     : '<div class="empty">Logged runs show up here.</div>';
 
+  const liftDirs = ids.map((id) => liftChange(inRange(exSessions(id)))?.dir);
+  const runDirs = runTypes.map((t) => runChange(inRange(runsOf(t)))?.dir);
   return `
     <div class="spread" style="align-items:center"><h1>Progress</h1><button class="linkbtn" data-act="go" data-to="archive">Archive ${I.chevron}</button></div>
     ${rangeSeg()}
     <div class="small" style="margin-top:-8px">Arrows and changes compare your first and latest session in the ${RANGE_TEXT[ui.range]}.</div>
-    <div class="stack4"><div class="eyebrow">Lifts${p ? ' · this program' : ''}</div>${lifts}</div>
-    <div class="stack4"><div class="eyebrow">Runs</div>${runs}</div>`;
+    ${accordion('lifts', `Lifts${p ? ' · this program' : ''}`, ids.length, ids.length === 1 ? 'lift' : 'lifts', liftDirs, lifts)}
+    ${accordion('runs', 'Runs', runTypes.length, runTypes.length === 1 ? 'run type' : 'run types', runDirs, runs)}`;
+}
+
+// Collapsible section; open/closed is kept in ui.open while the app is open.
+function accordion(key, title, count, noun, dirs, body) {
+  const open = !!ui.open[key];
+  const up = dirs.filter((d) => d === 'up').length;
+  const down = dirs.filter((d) => d === 'down').length;
+  const summary = [`${count} ${noun}`, up && `<span class="lift">${up} up</span>`, down && `<span class="missc">${down} down</span>`].filter(Boolean).join(' · ');
+  return `<section class="acc">
+    <button class="acc-head" data-act="toggleSec" data-k="${key}" aria-expanded="${open}">
+      <span class="stack4" style="gap:2px"><span class="acc-title">${title}</span><span class="small">${summary}</span></span>
+      <span class="acc-chev" aria-hidden="true">${I.chevron}</span>
+    </button>
+    ${open ? `<div class="acc-body">${body}</div>` : ''}
+  </section>`;
 }
 
 function yearAgo(list, pick) {
@@ -1430,6 +1447,10 @@ const A = {
     else go('archive');
   },
 
+  toggleSec(d) {
+    ui.open[d.k] = !ui.open[d.k];
+    render();
+  },
   showAll() {
     ui.showAll = true;
     render();

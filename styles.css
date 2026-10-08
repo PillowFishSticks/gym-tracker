@@ -91,6 +91,18 @@ h2 { margin: 0; font-family: var(--cond); font-size: 30px; line-height: 1.05; fo
 .tag.run { background: var(--run-bg); color: var(--run); }
 .dayname { width: 40px; flex-shrink: 0; font-family: var(--cond); font-size: 20px; font-weight: 700; color: var(--muted); }
 
+/* ---------- accordion ---------- */
+.acc { background: var(--card); border-radius: 18px; overflow: hidden; }
+.acc-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  width: 100%; min-height: 72px; padding: 14px 18px; border: none; background: none; color: var(--text); text-align: left;
+}
+.acc-title { font-family: var(--cond); font-size: 26px; font-weight: 700; }
+.acc-chev { color: var(--muted); display: flex; transition: transform .2s ease; }
+.acc-head[aria-expanded="true"] .acc-chev { transform: rotate(90deg); }
+.acc-body { padding: 0 16px 10px; border-top: 1px solid var(--line2); }
+.acc-body .empty { margin: 12px 0; }
+
 /* ---------- drag to reorder ---------- */
 [data-sortable] > [data-idx] { transition: transform .15s ease; }
 [data-sortable] > .dragging { transition: none; position: relative; z-index: 5; box-shadow: 0 10px 28px rgba(0, 0, 0, .6); background: #23262B; }
