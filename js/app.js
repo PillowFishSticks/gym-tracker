@@ -2,7 +2,7 @@ import { load, save as persist, uid, blank } from './store.js';
 import * as L from './logic.js';
 
 let S = load();
-const ui = { day: null, sheet: null, runForm: null, np: null, archiveTab: 'exercises', archiveQ: '', range: '1m', open: {} };
+const ui = { day: null, sheet: null, runForm: null, np: null, archiveTab: 'exercises', archiveQ: '', liftQ: '', range: '1m', open: {} };
 const $app = document.getElementById('app');
 const $sheet = document.getElementById('sheet');
 
@@ -765,6 +765,8 @@ function capList(items, row) {
     : '');
 }
 
+const liftMatch = (name) => name.toLowerCase().includes(ui.liftQ.trim().toLowerCase());
+
 function vProgress() {
   const p = cur();
   let ids = [];
@@ -782,14 +784,19 @@ function vProgress() {
         const last = all.at(-1);
         const best = L.bestSet(last.sets);
         const c = liftChange(ss);
-        return `<button class="line-item" data-act="go" data-to="exercise" data-id="${id}">
-          <span class="stack4" style="gap:2px"><span style="font-size:17px;font-weight:500">${esc(exName(id))}</span><span class="small">Last ${esc(dateLong(last.date))}</span></span>
+        const name = exName(id);
+        return `<button class="line-item" data-act="go" data-to="exercise" data-id="${id}" data-name="${esc(name.toLowerCase())}" ${liftMatch(name) ? '' : 'hidden'}>
+          <span class="stack4" style="gap:2px"><span style="font-size:17px;font-weight:500">${esc(name)}</span><span class="small">Last ${esc(dateLong(last.date))}</span></span>
           <span class="stack4" style="gap:2px;align-items:flex-end">
             <span class="hrow" style="gap:6px;color:var(--text2)">${best.reps} × ${fmtW(best.weight)}${best.weight ? ' kg' : ''} ${arrow(c ? c.dir : 'same')}</span>
             <span class="small ${c ? dirCls(c.dir) : ''}">${c ? liftChangeText(c) : ss.length ? '1 session' : 'none in period'}</span>
           </span></button>`;
       }).join('')
     : '<div class="empty">Finish a workout and your lifts show up here.</div>';
+  const liftSearch = ids.length ? `
+    <label class="hrow input" style="gap:10px;margin:12px 0 4px;background:var(--bg)"><span class="muted">${I.search}</span>
+      <input type="search" data-input="liftq" value="${esc(ui.liftQ)}" placeholder="Search lifts" aria-label="Search lifts" style="flex-grow:1;border:none;background:transparent;font-size:17px;outline:none"></label>
+    <div class="small" id="liftnone" style="padding:12px 2px" ${ids.some((id) => liftMatch(exName(id))) ? 'hidden' : ''}>No lifts match that.</div>` : '';
 
   const runs = runTypes.length
     ? runTypes.map((t) => {
@@ -812,7 +819,7 @@ function vProgress() {
     <div class="spread" style="align-items:center"><h1>Progress</h1><button class="linkbtn" data-act="go" data-to="archive">Archive ${I.chevron}</button></div>
     ${rangeSeg()}
     <div class="small" style="margin-top:-8px">Arrows and changes compare your first and latest session in the ${RANGE_TEXT[ui.range]}.</div>
-    ${accordion('lifts', `Lifts${p ? ' · this program' : ''}`, ids.length, ids.length === 1 ? 'lift' : 'lifts', liftDirs, lifts)}
+    ${accordion('lifts', `Lifts${p ? ' · this program' : ''}`, ids.length, ids.length === 1 ? 'lift' : 'lifts', liftDirs, liftSearch + lifts)}
     ${accordion('runs', 'Runs', runTypes.length, runTypes.length === 1 ? 'run type' : 'run types', runDirs, runs)}`;
 }
 
@@ -1536,6 +1543,16 @@ const INP = {
   },
   npf(el) {
     ui.np[el.dataset.f] = el.dataset.f === 'weeks' ? int(el.value, 1, 104, 12) : el.value;
+  },
+  // filters the Progress lift list in place so the keyboard stays open
+  liftq(el) {
+    ui.liftQ = el.value;
+    let any = false;
+    document.querySelectorAll('[data-name]').forEach((row) => {
+      row.hidden = !liftMatch(row.dataset.name);
+      any = any || !row.hidden;
+    });
+    document.getElementById('liftnone').hidden = any;
   },
   archq(el) {
     ui.archiveQ = el.value;
