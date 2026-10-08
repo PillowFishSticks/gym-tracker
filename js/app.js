@@ -282,7 +282,7 @@ function vToday() {
         })
         .join('')}</div>`;
       if (!S.active) h += `<button class="btn btn-primary" data-act="start" data-id="${w.id}">Start workout</button>`;
-      if (!S.active && notToday) h += `<button class="btn btn-ghost" data-act="cancelDay">Cancel, back to ${DAY_LONG[todayKey()]}</button>`;
+      if (!S.active && notToday) h += `<button class="btn btn-ghost" data-act="cancelDay">Cancel</button>`;
     }
   }
 
