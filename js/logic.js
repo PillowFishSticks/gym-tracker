@@ -55,8 +55,8 @@ export function setTargets(t, cfg) {
   return Array.from({ length: cfg.sets }, (_, i) => clamp(base[Math.min(i, base.length - 1)], 1, cfg.max));
 }
 
-// "12" when every set is the same, otherwise "12   11   10" (wide em spaces, so it reads as separate numbers).
-export const repsText = (arr) => (arr.every((r) => r === arr[0]) ? String(arr[0]) : arr.join(' '));
+// "12" when every set is the same, otherwise "12/11/10".
+export const repsText = (arr) => (arr.every((r) => r === arr[0]) ? String(arr[0]) : arr.join('/'));
 
 const sum = (arr) => arr.reduce((a, b) => a + b, 0);
 
@@ -82,19 +82,19 @@ export function nextTarget(cfg, step, t, done, missStreak = 0) {
   if (minW < t.weight) {
     const at = done.filter((s) => s.weight === minW).map((s) => s.reps);
     const arr = tr.map((_, i) => clamp(at[Math.min(i, at.length - 1)], 1, cfg.max));
-    return out(minW, bumpLowest(arr, cfg.max), 0, 'down', `Dropped to ${minW} kg · build back up`);
+    return out(minW, bumpLowest(arr, cfg.max), 0, 'down', `Dropped to ${minW} kg, build back up`);
   }
   // Even the first, freshest set couldn't reach the range: too heavy for now.
   // (Later sets dropping below it is normal fatigue and is handled below.)
   if (reps[0] < cfg.min) {
-    return out(Math.max(0, round(t.weight - step)), fill(cfg.min), 0, 'down', `Under ${cfg.min} reps · −${step} kg`);
+    return out(Math.max(0, round(t.weight - step)), fill(cfg.min), 0, 'down', `Under ${cfg.min} reps, −${step} kg`);
   }
   if (done.length < cfg.sets) {
-    return out(t.weight, tr, missStreak, 'same', 'Not all sets done · same target');
+    return out(t.weight, tr, missStreak, 'same', 'Not all sets done, same target');
   }
   // Top of the range: first set at the top, the rest within a rep of it.
   if (reps[0] >= cfg.max && reps.every((r) => r >= cfg.max - 1)) {
-    return out(round(t.weight + step), fill(cfg.min), 0, 'up', `Top of range · +${step} kg`);
+    return out(round(t.weight + step), fill(cfg.min), 0, 'up', `Top of range, +${step} kg`);
   }
   const got = sum(reps), want = sum(tr);
   if (got >= want) {
@@ -104,9 +104,9 @@ export function nextTarget(cfg, step, t, done, missStreak = 0) {
   }
   const short = want - got;
   if (missStreak >= 1) {
-    return out(t.weight, reps.map((r) => Math.min(r, cfg.max)), 0, 'down', 'Short twice · reset to what you did');
+    return out(t.weight, reps.map((r) => Math.min(r, cfg.max)), 0, 'down', 'Short twice, reset to what you did');
   }
-  return out(t.weight, tr, 1, 'same', `Short ${short} rep${short > 1 ? 's' : ''} · same target`);
+  return out(t.weight, tr, 1, 'same', `Short ${short} rep${short > 1 ? 's' : ''}, same target`);
 }
 
 // Estimated one-rep max (Epley) of the session's strongest set; reps alone for bodyweight.
