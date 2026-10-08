@@ -242,7 +242,7 @@ function vToday() {
   const finished = L.weekOf(p.startDate, today()) > p.weeks;
   const notToday = ui.day && ui.day !== todayKey();
 
-  let h = `${notToday ? `<button class="backtoday" data-act="setDay" data-day="${todayKey()}">${I.back} Back to today (${DAY_LONG[todayKey()]})</button>` : ''}
+  let h = `${notToday ? `<button class="backtoday" data-act="backWeek">${I.back} My week</button>` : ''}
     <div class="stack4">
       <div class="eyebrow">${DAY_LONG[key]}${notToday ? ' (picked)' : ''} · ${esc(weekLabel(p))}</div>
       <h1>${esc(w ? w.name : d.run ? RUN[d.run] : 'Rest day')}</h1>
@@ -1566,6 +1566,11 @@ const A = {
   weekTab(d) {
     ui.weekTab = d.v;
     render();
+  },
+  // From a picked day back to the weekly view; Today goes back to showing today.
+  backWeek() {
+    ui.day = null;
+    go('week');
   },
   // Show a day's planned workout/run on Today so it can be done now.
   doDay(d) {

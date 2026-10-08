@@ -1,6 +1,6 @@
 // Offline support: serve from cache straight away, refresh the cache in the background.
 // Bump VERSION whenever app files change so phones pick up the new build.
-const VERSION = 'gym-v22';
+const VERSION = 'gym-v23';
 const ASSETS = [
   './',
   './index.html',
