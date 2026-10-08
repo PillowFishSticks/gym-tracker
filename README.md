@@ -9,7 +9,7 @@ A simple hypertrophy and running tracker for your phone. Tap **Start**, do the s
 - **Android (Chrome):** open the link → tap **⋮** → **Install app** (or "Add to Home screen"). It installs like a normal app and works offline.
 - **iPhone (Safari):** open the link → tap **Share** → **Add to Home Screen**. Always open it from that icon so your data is kept.
 
-Your workouts are stored **only on your phone** — nothing is uploaded. Use **Program → Back up data** now and then to save a backup file (also how you move data to another phone).
+The first time you open it, enter **your code**. You stay signed in on that phone. Everything you log is saved to **your own Google Sheet** (one per person) within a few seconds; the phone also keeps a copy so the app is fast and works with no signal, and catches up when you're back online. **Program → Account** shows who's signed in, a link to your sheet, and Sign out.
 
 ## How progression works
 
@@ -34,6 +34,10 @@ Three types: threshold, long and easy. Enter any two of distance, time and pace 
 ## Programs
 
 A program is your week (which workout and/or run goes on which day) for a set number of weeks. When it ends, start the next one — copy the old one or start blank — and the old one moves to the **Archive**, where you can compare lifts and runs across months and years.
+
+## Google Sheets sync
+
+The app talks to a small Google Apps Script web app (in `sync/`, deployed from the owner's Google account with `clasp`). The script picks a person's sheet by their code and keeps the app's full data in a hidden **App data** tab, plus readable **Workouts**, **Runs** and **Targets** tabs that are rebuilt on every save. Codes live in `sync/Config.js`, which is not committed. To change code: edit `sync/`, then `clasp push` and `clasp redeploy <deploymentId>`.
 
 ## For development
 

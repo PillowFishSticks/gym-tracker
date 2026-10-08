@@ -1,5 +1,6 @@
 import { load, save as persist, uid, blank } from './store.js';
 import * as L from './logic.js';
+import * as Sync from './sync.js';
 
 let S = load();
 const ui = { day: null, sheet: null, runForm: null, np: null, archiveTab: 'exercises', archiveQ: '', liftQ: '', range: '1m', open: {} };
@@ -31,8 +32,79 @@ const num = (v) => {
 };
 
 function save() {
+  S.savedAt = Date.now();
   if (!persist(S)) toast('Could not save — phone storage may be full');
+  if (!S.demo && Sync.getSession()) {
+    Sync.setDirty(true);
+    schedulePush();
+  }
 }
+
+// ---------- Google Sheet sync ----------
+// The phone keeps its own copy (fast, works offline); changes go to the person's sheet in the
+// background, and the sheet's copy is loaded when the app opens if it's newer.
+
+let pushTimer = 0;
+let pushing = false;
+function schedulePush(delay = 1500) {
+  clearTimeout(pushTimer);
+  pushTimer = setTimeout(pushNow, delay);
+}
+
+async function pushNow() {
+  const sess = Sync.getSession();
+  if (!sess || S.demo || !Sync.isDirty()) return;
+  if (pushing) return schedulePush(2000);
+  if (!navigator.onLine) return setSync('offline');
+  pushing = true;
+  const sentAt = S.savedAt;
+  try {
+    const r = await Sync.pushRemote(sess.code, S, sentAt);
+    if (!r.ok) throw new Error(r.error);
+    if (S.savedAt === sentAt) Sync.setDirty(false);
+    setSync('ok');
+  } catch (e) {
+    setSync('error');
+    schedulePush(30000);
+  } finally {
+    pushing = false;
+  }
+}
+
+async function pullRemote() {
+  const sess = Sync.getSession();
+  if (!sess || S.demo) return;
+  if (Sync.isDirty()) return pushNow();
+  try {
+    const r = await Sync.loadRemote(sess.code);
+    if (!r.ok) return;
+    if (r.url && r.url !== sess.url) Sync.setSession({ ...sess, url: r.url });
+    if (r.state && (r.savedAt || 0) > (S.savedAt || 0) && !Sync.isDirty()) {
+      S = { ...blank(), ...r.state };
+      persist(S);
+      render();
+    }
+    setSync('ok');
+  } catch (e) { /* offline: keep the phone's copy */ }
+}
+
+function setSync(state) {
+  ui.sync = state;
+  syncNote();
+}
+
+// A one-line note at the top of the page when something isn't in the sheet.
+function syncNote() {
+  const el = document.getElementById('syncnote');
+  if (!el) return;
+  let msg = '';
+  if (Sync.getSession() && S.demo) msg = 'Demo data: nothing here is saved to your Google Sheet.';
+  else if (Sync.getSession() && Sync.isDirty() && (ui.sync === 'error' || ui.sync === 'offline')) msg = 'Not saved to your Google Sheet yet. It’ll retry when you’re online.';
+  el.textContent = msg;
+  el.hidden = !msg;
+}
+
+window.addEventListener('online', () => pushNow());
 
 let toastTimer = 0;
 function toast(msg) {
@@ -176,9 +248,16 @@ function render(toTop) {
   }
   let view = VIEWS[r.name] || vToday;
   if (r.name === 'train' && !S.active) view = vToday;
+  if (!Sync.getSession()) {
+    $app.className = 'full';
+    $app.innerHTML = vLogin();
+    renderSheet();
+    return;
+  }
   const full = view === vTrain;
   $app.className = full ? 'full' : '';
-  $app.innerHTML = view(r.params) + (full ? '' : nav(TAB_OF[r.name] || 'today'));
+  $app.innerHTML = '<div id="syncnote" class="small missc" hidden></div>' + view(r.params) + (full ? '' : nav(TAB_OF[r.name] || 'today'));
+  syncNote();
   if (toTop) window.scrollTo(0, 0);
   renderSheet();
 }
@@ -220,6 +299,19 @@ const backBtn = (to) => `<button class="iconbtn" data-act="${to ? 'go' : 'back'}
 // =====================================================================
 // Views
 // =====================================================================
+
+function vLogin() {
+  return `
+    <div class="grow"></div>
+    <div class="stack4"><div class="eyebrow">Sort It Out</div><h1>Sign in</h1>
+      <div class="sub">Enter your code. You’ll stay signed in on this phone.</div></div>
+    <form class="stack" data-submit="login" autocomplete="off" style="gap:12px">
+      <input class="input num" name="code" type="password" inputmode="numeric" pattern="[0-9]*" required aria-label="Your code" style="height:68px;font-size:34px;letter-spacing:.25em">
+      <div class="small missc" id="loginerr" hidden></div>
+      <button class="btn btn-primary" type="submit">Sign in</button>
+    </form>
+    <div class="grow" style="flex-grow:2"></div>`;
+}
 
 function vToday() {
   const p = cur();
@@ -680,7 +772,7 @@ function vWeek() {
     </div>`;
   const foot = `<div class="grid2">
       <button class="btn btn-ghost" data-act="go" data-to="programs">Programs</button>
-      <button class="btn btn-ghost" data-act="backup">Back up data</button>
+      <button class="btn btn-ghost" data-act="backup">Account</button>
     </div>`;
   if (tab === 'this') return head + vThisWeek(p) + foot;
   return head + `
@@ -1335,16 +1427,23 @@ function vProgramDetail(params) {
 // ---------- backup ----------
 
 function sBackup() {
+  const sess = Sync.getSession();
+  const status = S.demo ? 'Demo data isn’t saved to your sheet' : Sync.isDirty() ? 'Saving…' : 'All saved to your Google Sheet';
   return `
-    <div class="stack4"><h2>Back up your data</h2>
-    <div class="sub">Everything is stored only on this phone. Save a backup file now and then, e.g. to iCloud Drive or Google Drive. You can also use it to move your data to another phone.</div></div>
-    <button class="btn btn-primary" data-act="exportData" style="height:60px;font-size:24px">Save backup file</button>
+    <div class="stack4"><h2>${esc(sess.name)}</h2><div class="sub">${status}</div></div>
+    <div class="grid2">
+      ${sess.url ? `<a class="btn btn-ghost" href="${esc(sess.url)}" target="_blank" rel="noopener">Open my sheet</a>` : '<span></span>'}
+      <button class="btn btn-ghost" data-act="askSignOut">Sign out</button>
+    </div>
+    <div class="stack4" style="margin-top:8px"><div class="eyebrow">Backup file</div>
+    <div class="small">Your Google Sheet is your backup. You can also save a file copy, or restore one.</div></div>
+    <button class="btn btn-ghost" data-act="exportData">Save backup file</button>
     <label class="btn btn-ghost">Restore from a backup file<input type="file" accept="application/json,.json" data-change="importFile" hidden></label>
     <div class="small center">${S.lastBackup ? `Last backup: ${esc(L.fmtDate(S.lastBackup, { year: 'numeric' }))}` : 'No backup saved yet.'}</div>
     <div class="stack" style="margin-top:8px">
       <div class="eyebrow">Demo data</div>
-      ${S.demo ? '<button class="btn btn-danger btn-small" data-act="clearDemo">Clear demo data and start fresh</button>' : ''}
-      <button class="btn btn-ghost btn-small" data-act="loadDemo">Load demo data (replaces everything)</button>
+      ${S.demo ? '<button class="btn btn-danger btn-small" data-act="clearDemo">Clear demo data, back to my data</button>' : ''}
+      <button class="btn btn-ghost btn-small" data-act="loadDemo">Try demo data (not saved to your sheet)</button>
     </div>`;
 }
 
@@ -1786,12 +1885,32 @@ const A = {
     toast('Demo data loaded');
     go('today');
   },
+  // Demo data never goes to the sheet, so clearing it just reloads the person's own data.
   clearDemo() {
-    if (!confirm('Delete all demo data and start with an empty app?')) return;
     S = blank();
-    save();
+    persist(S);
+    Sync.setDirty(false);
     closeSheet();
     go('today');
+    pullRemote().then(() => toast('Back to your data'));
+  },
+  askSignOut() {
+    const unsaved = Sync.isDirty() && !S.demo;
+    ui.ask = {
+      title: 'Sign out?',
+      body: unsaved ? 'Some changes haven’t reached your Google Sheet yet and would be lost. Get online first if you can.' : 'Your data is safe in your Google Sheet. Sign in again with your code any time.',
+      yes: 'Sign out', act: 'signOut', id: '',
+    };
+    openSheet(sAsk);
+  },
+  signOut() {
+    Sync.setSession(null);
+    Sync.setDirty(false);
+    S = blank();
+    persist(S);
+    ui.sheet = null;
+    location.hash = '#/today';
+    render(true);
   },
 
   backup: () => openSheet(sBackup),
@@ -1904,6 +2023,40 @@ const CHG = {
 };
 
 const SUB = {
+  async login(form) {
+    const code = form.elements.code.value.trim();
+    const err = document.getElementById('loginerr');
+    const btn = form.querySelector('button');
+    btn.disabled = true;
+    btn.textContent = 'Signing in…';
+    err.hidden = true;
+    try {
+      const r = await Sync.loadRemote(code);
+      if (!r.ok) throw new Error(r.error === 'code' ? 'That code isn’t right.' : 'Something went wrong. Try again.');
+      Sync.setSession({ code, name: r.name, url: r.url });
+      const local = !S.demo && (S.programs.length || S.sessions.length || S.runs.length);
+      if (r.state) {
+        S = { ...blank(), ...r.state };
+        Sync.setDirty(false);
+      } else if (local) {
+        Sync.setDirty(true); // empty sheet: keep what's on this phone and send it up
+      } else {
+        S = blank();
+        Sync.setDirty(false);
+      }
+      persist(S);
+      ui.day = null;
+      location.hash = '#/today';
+      render(true);
+      toast(`Hi ${r.name}`);
+      pushNow();
+    } catch (e) {
+      err.textContent = e.message.startsWith('That') || e.message.startsWith('Something') ? e.message : 'Couldn’t reach Google. Check your connection.';
+      err.hidden = false;
+      btn.disabled = false;
+      btn.textContent = 'Sign in';
+    }
+  },
   saveRunEdit(form) {
     const f = form.elements;
     const r = S.runs.find((x) => x.id === ui.runId);
@@ -2087,3 +2240,8 @@ if ('serviceWorker' in navigator) {
 }
 if (S.active) wake(true);
 render(true);
+// Get the sheet's latest copy on open and whenever the app comes back to the front.
+pullRemote();
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') pullRemote();
+});
