@@ -106,18 +106,19 @@ export function buildDemo() {
           const entries = wo.items.map((it) => {
             const ex = S.exercises[it.exId];
             const tRaw = S.targets[it.exId];
-            const t = { weight: tRaw.weight, reps: L.clamp(tRaw.reps, it.min, it.max) };
+            const tr = L.setTargets(tRaw, it);
+            const t = { weight: tRaw.weight, reps: tr[0], sets: tr };
             const sets = [];
             for (let i = 0; i < it.sets; i++) {
               const r = rand();
-              const failChance = 0.03 + i * 0.04; // later sets fail more often
-              let reps = t.reps;
-              if (r < failChance) reps = Math.max(1, t.reps - (rand() < 0.7 ? 1 : 2));
-              else if (r > 0.96) reps = t.reps + 1;
-              sets.push({ reps, weight: t.weight, hit: reps >= t.reps });
+              const failChance = 0.05 + i * 0.06; // later sets fall short more often
+              let reps = tr[i];
+              if (r < failChance) reps = Math.max(1, tr[i] - (rand() < 0.75 ? 1 : 2));
+              else if (r > 0.7) reps = tr[i] + 1; // good days: a rep over target
+              sets.push({ reps, weight: t.weight, hit: reps >= tr[i] });
             }
             const nx = L.nextTarget({ sets: it.sets, min: it.min, max: it.max }, ex.step, t, sets, tRaw.miss || 0);
-            S.targets[it.exId] = { weight: nx.weight, reps: nx.reps, miss: nx.miss };
+            S.targets[it.exId] = { weight: nx.weight, reps: nx.reps, sets: nx.sets, miss: nx.miss };
             return { exId: it.exId, cfg: { sets: it.sets, min: it.min, max: it.max }, target: t, sets };
           });
           S.sessions.push({ id: id('s'), date, programId: prog.id, workoutId: wo.id, workoutName: wo.name, minutes: 45 + Math.round(rand() * 25), entries });

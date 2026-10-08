@@ -76,10 +76,15 @@ const prog = (id) => S.programs.find((p) => p.id === id);
 const exName = (id) => S.exercises[id]?.name || 'Exercise';
 const exStep = (id) => S.exercises[id]?.step ?? 2.5;
 
+// Next target for an exercise in a workout: weight plus a rep target per set.
 function targetFor(exId, item) {
   const t = S.targets[exId] || { weight: 0, reps: item.min };
-  return { weight: t.weight, reps: L.clamp(t.reps, item.min, item.max) };
+  const sets = L.setTargets(t, item);
+  return { weight: t.weight, sets, reps: sets[0] };
 }
+const setReps = (t, i) => t.sets[Math.min(i, t.sets.length - 1)];
+// '12' or '12·11·10' for a stored target
+const tReps = (t) => L.repsText(t.sets && t.sets.length ? t.sets : [t.reps]);
 
 function findExByName(name) {
   const n = name.trim().toLowerCase();
@@ -271,7 +276,7 @@ function vToday() {
         .map((it) => {
           const t = targetFor(it.exId, it);
           return `<div class="row"><div><div class="name">${esc(exName(it.exId))}</div><div class="meta">${it.sets} sets · ${it.min}–${it.max} reps</div></div>
-            <div class="big">${t.reps} × ${fmtW(t.weight)}${kgUnit(t.weight)}</div></div>`;
+            <div class="big">${L.repsText(t.sets)} × ${fmtW(t.weight)}${kgUnit(t.weight)}</div></div>`;
         })
         .join('')}</div>`;
       if (!S.active) h += `<button class="btn btn-primary" data-act="start" data-id="${w.id}">Start workout</button>`;
@@ -329,7 +334,7 @@ function vTrain() {
     <div class="setbars" aria-hidden="true">${bars.map((c) => `<span class="${c}"></span>`).join('')}</div>
     <div class="setcard">
       <div class="eyebrow">Set ${logs.length + 1} of ${it.sets}</div>
-      <div class="setnum"><span class="n">${t.reps}</span><span class="x">×</span><span class="n">${fmtW(t.weight)}</span></div>
+      <div class="setnum"><span class="n">${setReps(t, logs.length)}</span><span class="x">×</span><span class="n">${fmtW(t.weight)}</span></div>
       <div class="setlabels"><span>reps</span><span>${t.weight ? 'kg' : 'bodyweight'}</span></div>
       ${logs.length ? `<button class="linkbtn" data-act="editActive" data-k="${it.k}" style="margin-top:8px;color:var(--muted);font-weight:500">Done: ${esc(setsText(logs))} · <span class="lift">&nbsp;Edit</span></button>` : ''}
     </div>
@@ -427,7 +432,7 @@ function finishWorkout() {
   const items = entries.map((e) => {
     const prev = S.targets[e.exId] || {};
     const nx = L.nextTarget(e.cfg, exStep(e.exId), e.target, e.sets, prev.miss || 0);
-    S.targets[e.exId] = { weight: nx.weight, reps: nx.reps, miss: nx.miss };
+    S.targets[e.exId] = { weight: nx.weight, reps: nx.reps, sets: nx.sets, miss: nx.miss };
     return { exId: e.exId, dir: nx.dir, why: nx.why };
   });
   const minutes = Math.max(1, Math.round((Date.now() - a.started) / 60000));
@@ -453,7 +458,7 @@ function vSummary() {
         const cls = x.why.startsWith('Top') ? 'lift' : x.dir === 'down' || x.why.startsWith('Missed') ? 'missc' : '';
         return `<button class="row" data-act="editTarget" data-ex="${x.exId}">
           <div><div class="name">${esc(exName(x.exId))}</div><div class="meta ${cls}">${esc(x.why)}</div></div>
-          <div class="hrow"><span class="big">${t.reps} × ${fmtW(t.weight)}</span>${arrow(x.dir)}</div></button>`;
+          <div class="hrow"><span class="big">${tReps(t)} × ${fmtW(t.weight)}</span>${arrow(x.dir)}</div></button>`;
       })
       .join('')}</div>
     <div class="small">Tap a row to change next time's target.</div>
@@ -465,7 +470,7 @@ function sTarget() {
   const t = ui.tgt;
   return `
     <div class="stack4"><h2>${esc(exName(t.exId))}</h2><div class="sub">Next target</div></div>
-    <div class="stack"><div class="eyebrow">Reps</div>${stepper('tstep', 'reps', t.reps, 'reps', '', 'tgt')}</div>
+    <div class="stack"><div class="eyebrow">Reps</div>${stepper('tstep', 'reps', t.reps, 'reps', '', 'tgt')}<div class="small">Applies to every set.</div></div>
     <div class="stack"><div class="eyebrow">Weight (kg)</div>${stepper('tstep', 'weight', t.weight, 'weight', '', 'tgt')}</div>
     <button class="btn btn-primary" data-act="saveTarget">Save</button>`;
 }
@@ -852,7 +857,7 @@ function vExercise(params) {
   let h = `<div class="hrow">${backBtn()}</div><h1>${esc(ex.name)}</h1>`;
   if (t) {
     h += `<div class="card"><div class="eyebrow">Next target</div>
-      <div class="spread" style="align-items:center"><span class="cond" style="font-size:40px">${t.reps} × ${fmtW(t.weight)}${kgUnit(t.weight)}</span>
+      <div class="spread" style="align-items:center"><span class="cond" style="font-size:40px">${tReps(t)} × ${fmtW(t.weight)}${kgUnit(t.weight)}</span>
       <button class="linkbtn" data-act="editTarget" data-ex="${ex.id}">Change</button></div></div>`;
   }
   if (!all.length) return h + '<div class="empty">No sets logged yet.</div>';
@@ -1016,7 +1021,7 @@ function createProgram() {
     if (!np.keep) {
       for (const w of Object.values(workouts)) for (const it of w.items) {
         const t = S.targets[it.exId];
-        if (t) Object.assign(t, { reps: it.min, miss: 0 });
+        if (t) Object.assign(t, { reps: it.min, sets: [it.min], miss: 0 });
       }
     }
   }
@@ -1211,11 +1216,12 @@ const A = {
   done() {
     const it = S.active.items[S.active.ex];
     const t = targetFor(it.exId, it);
-    logSet({ reps: t.reps, weight: t.weight, hit: true });
+    logSet({ reps: setReps(t, (S.active.logs[it.k] || []).length), weight: t.weight, hit: true });
   },
   missed() {
     const it = S.active.items[S.active.ex];
-    const t = targetFor(it.exId, it);
+    const full = targetFor(it.exId, it);
+    const t = { weight: full.weight, reps: setReps(full, (S.active.logs[it.k] || []).length) };
     ui.miss = { reps: t.reps, weight: t.weight, step: exStep(it.exId), t };
     openSheet(sMissed);
   },
@@ -1242,8 +1248,8 @@ const A = {
     const a = S.active;
     const it = a.items.find((x) => String(x.k) === d.k);
     const t = targetFor(it.exId, it);
-    openSetEditor(exName(it.exId), `Target ${t.reps} × ${fmtW(t.weight)}${t.weight ? ' kg' : ''}`, a.logs[it.k] || [], exStep(it.exId), (sets) => {
-      a.logs[it.k] = sets.map((s) => ({ ...s, hit: s.reps >= t.reps && s.weight >= t.weight }));
+    openSetEditor(exName(it.exId), `Target ${L.repsText(t.sets)} × ${fmtW(t.weight)}${t.weight ? ' kg' : ''}`, a.logs[it.k] || [], exStep(it.exId), (sets) => {
+      a.logs[it.k] = sets.map((s, i) => ({ ...s, hit: s.reps >= setReps(t, i) && s.weight >= t.weight }));
       a.hist = a.hist.filter((k) => k !== it.k).concat(sets.map(() => it.k));
       // a finished exercise that now has sets missing comes back as the current one
       const i = a.items.indexOf(it);
@@ -1261,7 +1267,7 @@ const A = {
     const e = s?.entries.find((x) => x.exId === d.ex);
     if (!e) return;
     openSetEditor(exName(e.exId), `${s.workoutName} · ${L.fmtDate(s.date, { weekday: 'short', year: 'numeric' })}`, e.sets, exStep(e.exId), (sets) => {
-      if (sets.length) e.sets = sets.map((x) => ({ ...x, hit: x.reps >= e.target.reps && x.weight >= e.target.weight }));
+      if (sets.length) e.sets = sets.map((x, i) => ({ ...x, hit: x.reps >= L.setTargets(e.target, e.cfg)[i] && x.weight >= e.target.weight }));
       else s.entries = s.entries.filter((x) => x !== e);
       if (!s.entries.length) S.sessions = S.sessions.filter((x) => x !== s);
       toast('Saved · next target unchanged (tap Change to adjust)');
@@ -1315,7 +1321,7 @@ const A = {
 
   editTarget(d) {
     const t = S.targets[d.ex] || { weight: 0, reps: 10 };
-    ui.tgt = { exId: d.ex, reps: t.reps, weight: t.weight, step: exStep(d.ex) };
+    ui.tgt = { exId: d.ex, reps: (t.sets && t.sets[0]) || t.reps, weight: t.weight, step: exStep(d.ex) };
     openSheet(sTarget);
   },
   tstep(d) {
@@ -1326,7 +1332,7 @@ const A = {
   },
   saveTarget() {
     const t = ui.tgt;
-    S.targets[t.exId] = { weight: t.weight, reps: t.reps, miss: 0 };
+    S.targets[t.exId] = { weight: t.weight, reps: t.reps, sets: [t.reps], miss: 0 };
     save();
     closeSheet();
     render();
@@ -1507,7 +1513,7 @@ const INP = {
         f.max.value = cfg.max;
       }
       hint.className = 'small lift';
-      hint.textContent = t ? `Done before · picks up at ${t.reps} × ${fmtW(t.weight)}${t.weight ? ' kg' : ''}` : 'Done before';
+      hint.textContent = t ? `Done before · picks up at ${tReps(t)} × ${fmtW(t.weight)}${t.weight ? ' kg' : ''}` : 'Done before';
     } else {
       hint.className = 'small';
       hint.textContent = '';
@@ -1626,8 +1632,8 @@ const SUB = {
       ex.step = step;
     }
     const t = S.targets[ex.id];
-    if (!t) S.targets[ex.id] = { weight: kg || 0, reps: min, miss: 0 };
-    else if (kg != null && kg !== t.weight) S.targets[ex.id] = { weight: kg, reps: min, miss: 0 };
+    if (!t) S.targets[ex.id] = { weight: kg || 0, reps: min, sets: [min], miss: 0 };
+    else if (kg != null && kg !== t.weight) S.targets[ex.id] = { weight: kg, reps: min, sets: [min], miss: 0 };
     w.items.push({ exId: ex.id, sets, min, max });
     save();
     render();
@@ -1649,7 +1655,9 @@ const SUB = {
     const old = S.targets[it.exId] || {};
     const weight = num(f.kg.value) ?? old.weight ?? 0;
     const reps = int(f.reps.value, 1, 100, it.min);
-    if (weight !== old.weight || reps !== old.reps) S.targets[it.exId] = { weight, reps, miss: 0 };
+    const oldFirst = (old.sets && old.sets[0]) || old.reps;
+    if (reps !== oldFirst) S.targets[it.exId] = { weight, reps, sets: [reps], miss: 0 };
+    else if (weight !== old.weight) S.targets[it.exId] = { ...old, weight, miss: 0 };
     save();
     closeSheet();
     render();
