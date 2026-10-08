@@ -1072,17 +1072,19 @@ function vExercise(params) {
   } else {
     const c = liftChange(ss);
     const first = L.bestSet(ss[0].sets), last = L.bestSet(ss.at(-1).sets);
+    const totalReps = (s) => s.sets.reduce((n, x) => n + x.reps, 0);
     h += `<div class="card">
-      <div class="spread"><span class="eyebrow">Best set per session</span><span class="small">${ss.length} session${ss.length === 1 ? '' : 's'}</span></div>
+      <div class="spread"><span class="eyebrow">Progression</span><span class="small">${ss.length} session${ss.length === 1 ? '' : 's'}</span></div>
       ${c ? `<div class="hrow" style="flex-wrap:wrap;gap:4px 10px"><span class="cond" style="font-size:28px">${first.reps} × ${fmtW(first.weight)} → <span class="${dirCls(c.dir)}">${last.reps} × ${fmtW(last.weight)}</span></span>
-        <span class="small ${dirCls(c.dir)}">${liftChangeText(c)} in the ${RANGE_TEXT[ui.range]}</span></div>
-        ${last.weight ? `<div class="small">Est. 1-rep max ${Math.round(c.ea)} → <span class="${dirCls(c.dir)}">${Math.round(c.eb)} kg</span> · combines weight and reps</div>` : ''}` : ''}
-      ${last.weight ? `<div class="seg" role="group" aria-label="Graph shows" style="padding:4px">
-        <button data-act="chartMode" data-v="weight" aria-pressed="${ui.chart !== 'e1rm'}" style="height:38px;font-size:14px">Weight</button>
-        <button data-act="chartMode" data-v="e1rm" aria-pressed="${ui.chart === 'e1rm'}" style="height:38px;font-size:14px">Est. 1-rep max</button></div>` : ''}
-      ${ui.chart === 'e1rm' && last.weight
-        ? timeChart(ss.map((s) => ({ date: s.date, v: L.e1rm(s.sets) })), { color: LIME, fmt: (v) => `${Math.round(v)} kg`, label: `${ex.name} estimated one-rep max, ${RANGE_TEXT[ui.range]}` })
-        : timeChart(ss.map((s) => ({ date: s.date, v: L.bestSet(s.sets).weight })), { color: LIME, fmt: (v) => `${L.round(v)} kg`, label: `${ex.name} heaviest set, ${RANGE_TEXT[ui.range]}` })}
+        <span class="small ${dirCls(c.dir)}">${liftChangeText(c)} in the ${RANGE_TEXT[ui.range]}</span></div>` : ''}
+    </div>
+    ${last.weight ? `<div class="card">
+      <div class="spread"><span class="eyebrow">Weight</span><span class="small">kg lifted each session</span></div>
+      ${timeChart(ss.map((s) => ({ date: s.date, v: L.bestSet(s.sets).weight })), { color: LIME, fmt: (v) => `${L.round(v)} kg`, label: `${ex.name} weight per session, ${RANGE_TEXT[ui.range]}` })}
+    </div>` : ''}
+    <div class="card">
+      <div class="spread"><span class="eyebrow">Reps</span><span class="small">total across all sets</span></div>
+      ${timeChart(ss.map((s) => ({ date: s.date, v: totalReps(s) })), { color: LIME, fmt: (v) => `${Math.round(v)}`, label: `${ex.name} total reps per session, ${RANGE_TEXT[ui.range]}` })}
     </div>`;
   }
 
@@ -1777,10 +1779,6 @@ const A = {
     ui.day = d.day === todayKey() ? null : d.day;
     ui.dayFrom = 'week';
     go('today');
-  },
-  chartMode(d) {
-    ui.chart = d.v;
-    render();
   },
   toggleSec(d) {
     ui.open[d.k] = !ui.open[d.k];
