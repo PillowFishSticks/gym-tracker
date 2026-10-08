@@ -168,6 +168,12 @@ const TAB_OF = {
 
 function render(toTop) {
   const r = route();
+  // #/demo is a shortcut that reloads fresh demo data (asks first if there's data already).
+  if (r.name === 'demo') {
+    history.replaceState(null, '', '#/today');
+    A.loadDemo().finally(() => render(true));
+    return;
+  }
   let view = VIEWS[r.name] || vToday;
   if (r.name === 'train' && !S.active) view = vToday;
   const full = view === vTrain;
