@@ -47,4 +47,5 @@ Plain HTML, CSS and JavaScript — no build step. Run any static server in this 
 
 - **Busy machine?** During a workout tap the list icon (top right) and pick any exercise to do next. Sets already done are kept.
 - **Mistyped a set?** Tap "Done: …" on the set screen, or a finished exercise in the list, to change reps/weight or delete a set. Past sessions can be fixed from **Progress → exercise → Recent sessions**. Runs can be edited by tapping them.
+- **Supersets:** tap an exercise in a workout → **Superset with …** to link it to the next one (2 or 3+). During the workout their sets alternate: A, B, A, B…
 - **Reorder exercises** by dragging the ⠿ handle in a workout. **Swap two days** by dragging a day's ⠿ onto another day.

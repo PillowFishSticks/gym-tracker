@@ -381,9 +381,9 @@ function vToday() {
         <button class="btn btn-ghost" data-act="go" data-to="workout" data-id="${w.id}">Add exercises</button>`;
     } else {
       h += `<div class="stack">${w.items
-        .map((it) => {
+        .map((it, i) => {
           const t = targetFor(it.exId, it);
-          return `<div class="row exrow"><div><div class="name">${esc(exName(it.exId))}</div><div class="meta">${it.sets} sets · ${it.min}–${it.max} reps</div></div>
+          return `<div class="row exrow ${ssClass(w.items, i)}"><div><div class="name">${esc(exName(it.exId))}</div><div class="meta">${it.group ? '<span class="lift">Superset</span> · ' : ''}${it.sets} sets · ${it.min}–${it.max} reps</div></div>
             <div class="big">${L.repsText(t.sets)} × ${fmtW(t.weight)}${kgUnit(t.weight)}</div></div>`;
         })
         .join('')}</div>`;
@@ -493,6 +493,7 @@ function vTrain() {
       <button class="iconbtn" data-act="pickEx" aria-label="Choose which exercise to do next">${I.list}</button>
     </div>
     <div class="stack4">
+      ${it.group ? `<div><span class="tag lift">Superset${(() => { const n = nextInSuperset(a, it); return n ? ` · next: ${esc(exName(n.exId))}` : ' · last one'; })()}</span></div>` : ''}
       <h1>${esc(exName(it.exId))}</h1>
       <div class="sub">Range ${it.min}–${it.max} reps · ${prev ? `last time ${esc(setsText(prev.sets))}` : 'first time'}</div>
     </div>
@@ -556,12 +557,65 @@ function openSetEditor(title, sub, sets, step, onSave) {
   openSheet(sEditSets);
 }
 
+// ---------- supersets ----------
+// Exercises next to each other with the same item.group are a superset: their sets alternate
+// (A1, B1, A2, B2 ...). Groups are always kept contiguous and at least two long.
+
+function normGroups(items) {
+  let i = 0;
+  while (i < items.length) {
+    const g = items[i].group;
+    if (!g) { i++; continue; }
+    let j = i;
+    while (j < items.length && items[j].group === g) j++;
+    const id = uid();
+    for (let x = i; x < j; x++) {
+      if (j - i > 1) items[x].group = id;
+      else delete items[x].group;
+    }
+    i = j;
+  }
+}
+
+// Row classes so a superset reads as one joined block in lists.
+function ssClass(items, i) {
+  const g = items[i].group;
+  if (!g) return '';
+  const first = i === 0 || items[i - 1].group !== g;
+  const last = i === items.length - 1 || items[i + 1].group !== g;
+  return `ss${first ? ' ss-first' : ''}${last ? ' ss-last' : ''}`;
+}
+
+// The superset member that comes after `it` (wrapping round), skipping finished ones.
+function nextInSuperset(a, it) {
+  if (!it.group) return null;
+  let end = a.ex;
+  while (end < a.items.length && a.items[end].group === it.group) end++;
+  const block = a.items.slice(a.ex, end);
+  const pos = block.indexOf(it);
+  return [...block.slice(pos + 1), ...block.slice(0, pos)].find((x) => (a.logs[x.k] || []).length < x.sets) || null;
+}
+
 function logSet(set) {
   const a = S.active;
   const it = a.items[a.ex];
   (a.logs[it.k] = a.logs[it.k] || []).push(set);
   a.hist.push(it.k);
-  if (a.logs[it.k].length >= it.sets) a.ex++;
+  const done = (x) => (a.logs[x.k] || []).length >= x.sets;
+  if (it.group) {
+    // Rotate the superset so the next member with sets left comes up; finished ones move behind.
+    let end = a.ex;
+    while (end < a.items.length && a.items[end].group === it.group) end++;
+    const block = a.items.slice(a.ex, end);
+    const pos = block.indexOf(it);
+    const cycle = [...block.slice(pos + 1), ...block.slice(0, pos + 1)];
+    const finished = block.filter(done);
+    const open = cycle.filter((x) => !done(x));
+    a.items.splice(a.ex, block.length, ...finished, ...open);
+    a.ex += finished.length;
+  } else if (done(it)) {
+    a.ex++;
+  }
   if (a.ex >= a.items.length) return finishWorkout();
   save();
   render(true);
@@ -844,9 +898,9 @@ function vWorkout(params) {
     <div class="stack" data-sortable="ex" data-wid="${w.id}">${w.items.length
       ? w.items.map((it, i) => {
           const t = targetFor(it.exId, it);
-          return `<button class="row" data-idx="${i}" data-act="itemSheet" data-wid="${w.id}" data-i="${i}">
+          return `<button class="row ${ssClass(w.items, i)}" data-idx="${i}" data-act="itemSheet" data-wid="${w.id}" data-i="${i}">
             ${w.items.length > 1 ? `<span class="handle" data-handle aria-label="Drag to reorder">${I.grip}</span>` : ''}
-            <span class="name grow">${esc(exName(it.exId))}</span>
+            <span class="grow"><span class="name">${esc(exName(it.exId))}</span>${it.group ? '<span class="sslabel">Superset</span>' : ''}</span>
             <span class="small" style="white-space:nowrap">${it.sets} × ${it.min}–${it.max} · ${fmtW(t.weight)}${t.weight ? ' kg' : ''}</span></button>`;
         }).join('')
       : '<div class="empty">No exercises yet. Add the first one below.</div>'}</div>
@@ -894,6 +948,14 @@ function sItem() {
     <div class="grid2">
       <button class="btn btn-ghost btn-small" data-act="moveItem" data-d="-1" ${ui.item.i === 0 ? 'disabled' : ''}>Move up</button>
       <button class="btn btn-ghost btn-small" data-act="moveItem" data-d="1" ${last ? 'disabled' : ''}>Move down</button>
+    </div>
+    <div class="stack" style="gap:8px">
+      <div class="eyebrow">Superset</div>
+      ${last ? '' : it.group && w.items[ui.item.i + 1].group === it.group
+        ? `<button class="btn btn-ghost btn-small" data-act="unlinkNext">Unlink from ${esc(exName(w.items[ui.item.i + 1].exId))}</button>`
+        : `<button class="btn btn-ghost btn-small" data-act="linkNext" style="color:var(--lift)">Superset with ${esc(exName(w.items[ui.item.i + 1].exId))}</button>`}
+      ${it.group ? '<button class="btn btn-ghost btn-small" data-act="leaveSuperset">Take out of superset</button>' : ''}
+      <div class="small">Superset exercises alternate set by set: A, B, A, B…</div>
     </div>
     <button class="btn btn-danger btn-small" data-act="removeItem">Remove from this workout</button>`;
 }
@@ -1571,7 +1633,11 @@ const A = {
     const a = S.active;
     const k = a.hist.pop();
     a.logs[k].pop();
-    a.ex = a.items.findIndex((i) => i.k === k);
+    // Bring that exercise back to be the current one (works inside supersets too).
+    const i = a.items.findIndex((x) => x.k === k);
+    const [it] = a.items.splice(i, 1);
+    if (i < a.ex) a.ex--;
+    a.items.splice(a.ex, 0, it);
     save();
     render(true);
   },
@@ -1712,6 +1778,34 @@ const A = {
     if (j < 0 || j >= items.length) return;
     [items[i], items[j]] = [items[j], items[i]];
     ui.item.i = j;
+    normGroups(items);
+    save();
+    render();
+  },
+  linkNext() {
+    const items = cur().workouts[ui.item.wid].items;
+    const a = items[ui.item.i], b = items[ui.item.i + 1];
+    const g = a.group || b.group || uid();
+    const old = b.group;
+    for (const x of items) if (old && x.group === old) x.group = g; // joining onto an existing superset
+    a.group = b.group = g;
+    normGroups(items);
+    save();
+    render();
+  },
+  unlinkNext() {
+    const items = cur().workouts[ui.item.wid].items;
+    const g = items[ui.item.i].group;
+    const ng = uid();
+    for (let x = ui.item.i + 1; x < items.length && items[x].group === g; x++) items[x].group = ng;
+    normGroups(items);
+    save();
+    render();
+  },
+  leaveSuperset() {
+    const items = cur().workouts[ui.item.wid].items;
+    delete items[ui.item.i].group;
+    normGroups(items);
     save();
     render();
   },
@@ -1719,6 +1813,7 @@ const A = {
     const items = cur().workouts[ui.item.wid].items;
     if (!confirm(`Remove ${exName(items[ui.item.i].exId)} from this workout? Its history is kept.`)) return;
     items.splice(ui.item.i, 1);
+    normGroups(items);
     save();
     closeSheet();
     render();
@@ -2143,6 +2238,7 @@ const SORT = {
   ex(list, from, to) {
     const items = cur().workouts[list.dataset.wid].items;
     items.splice(to, 0, items.splice(from, 1)[0]);
+    normGroups(items);
   },
   // This week only: swap what two days show, without touching the plan.
   thisweek(list, from, to) {

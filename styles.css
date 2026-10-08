@@ -102,6 +102,12 @@ h2 { margin: 0; font-family: var(--cond); font-size: 30px; line-height: 1.05; fo
 
 .chg { display: inline-flex; gap: 12px; }
 
+/* ---------- supersets: joined rows with a lime edge ---------- */
+.row.ss { box-shadow: inset 4px 0 0 var(--lift); }
+.row.ss:not(.ss-last) { border-bottom-left-radius: 0; border-bottom-right-radius: 0; margin-bottom: -6px; }
+.row.ss:not(.ss-first) { border-top-left-radius: 0; border-top-right-radius: 0; border-top: 1px solid var(--line2); }
+.sslabel { display: block; font-size: 12px; font-weight: 600; color: var(--lift); letter-spacing: .06em; text-transform: uppercase; margin-top: 2px; }
+
 /* ---------- accordion ---------- */
 .acc { background: var(--card); border-radius: 18px; overflow: hidden; }
 .acc-head {
