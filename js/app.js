@@ -988,7 +988,7 @@ function vNewProgram(params) {
           <div class="card" style="gap:0;padding:4px 16px">
             ${toggle('workouts', 'Workouts and days')}
             ${toggle('runs', 'Runs')}
-            ${toggle('keep', 'Carry on progression', 'Off: each lift’s reps go back to the bottom of its range')}
+            ${toggle('keep', 'Keep latest weights & reps', 'Picks up from your last session. Off: same weights, reps back to the bottom of each range')}
           </div>` : '<div class="small">Exercises you’ve done before still remember their last weight when you add them.</div>'}
       </div>` : ''}
     ${c ? `<div class="small">${esc(c.name)} will move to the Archive.</div>` : ''}
