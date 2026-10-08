@@ -136,6 +136,10 @@ const I = {
   back: svg('<path d="M15 6l-6 6 6 6"/>'),
   close: svg('<path d="M6 6l12 12M18 6L6 18"/>'),
   list: svg('<path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/>'),
+  pencil: svg('<path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/>', 26),
+  cal: svg('<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/>', 14),
+  repeat: svg('<path d="M17 2l3 3-3 3"/><path d="M4 11V9a4 4 0 0 1 4-4h12"/><path d="M7 22l-3-3 3-3"/><path d="M20 13v2a4 4 0 0 1-4 4H4"/>', 14),
+  checkBig: svg('<path d="M5 12.5l4.5 4.5L19 7.5"/>', 38, 3.2),
   undo: svg('<path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>'),
   bin: svg('<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>', 20),
   check: svg('<path d="M5 12.5l4.5 4.5L19 7.5"/>', 30, 3),
@@ -273,6 +277,11 @@ function render(toTop) {
   syncNote();
   if (toTop) window.scrollTo(0, 0);
   renderSheet();
+  if (ui.reopen) { // a panel to show again after navigating back
+    const f = ui.reopen;
+    ui.reopen = null;
+    f();
+  }
 }
 
 function nav(active) {
@@ -411,12 +420,6 @@ function vToday() {
     h += `<p class="sub">Nothing planned${notToday ? '' : ' today'}.</p>
       <button class="btn btn-ghost" data-act="daySheet" data-day="${key}">Plan ${DAY_LONG[key]}</button>`;
   }
-  // What's still to do this week, for reference only (change days on Program → This week).
-  const left = ws.slots.filter((s) => !s.doneOn && s.day !== key);
-  if (left.length && !finished) {
-    h += `<div class="stack4" style="margin-top:4px"><div class="eyebrow">Left this week</div>
-      <div class="tags" style="gap:8px">${left.map((s) => `<span class="tag ${s.kind === 'run' ? 'run' : 'lift'} todo">${esc(s.name)} <span style="font-weight:500;opacity:.75">${DAY_LONG[s.day].slice(0, 3)}</span></span>`).join('')}</div></div>`;
-  }
   h += `<button class="btn btn-ghost" data-act="pickDay">Do a different day</button>`;
   return h;
 }
@@ -509,18 +512,17 @@ function vTrain() {
       ${logs.length ? `<button class="linkbtn" data-act="editActive" data-k="${it.k}" style="margin-top:8px;color:var(--muted);font-weight:500">Done: ${esc(setsText(logs))} · <span class="lift">&nbsp;Edit</span></button>` : ''}
     </div>
     ${(() => {
+      // One row: Different (pencil) · same as last week · same as last set · Done (tick)
       const wk = lastWeekSet(it, logs.length);
       const ls = logs.at(-1);
       const lbl = (s) => `${s.reps} × ${fmtW(s.weight)}`;
-      return `<div class="quick">
-        <button data-act="sameWeek" ${wk ? '' : 'disabled'}><span>Same as last week</span><b>${wk ? lbl(wk) : '—'}</b></button>
-        <button data-act="sameSet" ${ls ? '' : 'disabled'}><span>Same as last set</span><b>${ls ? lbl(ls) : '—'}</b></button>
+      return `<div class="actrow">
+        <button class="act-diff" data-act="missed" aria-label="Different: log other reps or weight">${I.pencil}</button>
+        <button class="act-quick" data-act="sameWeek" ${wk ? '' : 'disabled'} aria-label="Same as last week${wk ? ': ' + lbl(wk) : ''}">${I.cal}<b>${wk ? lbl(wk) : '—'}</b></button>
+        <button class="act-quick" data-act="sameSet" ${ls ? '' : 'disabled'} aria-label="Same as last set${ls ? ': ' + lbl(ls) : ''}">${I.repeat}<b>${ls ? lbl(ls) : '—'}</b></button>
+        <button class="act-done" data-act="done" aria-label="Done">${I.checkBig}</button>
       </div>`;
-    })()}
-    <div class="actions">
-      <button class="btn-miss" data-act="missed">Different</button>
-      <button class="btn-done" data-act="done">${I.check}Done</button>
-    </div>`;
+    })()}`;
 }
 
 // Logs are keyed by each item's `k` (not its position) so skipped exercises can move to the end.
@@ -907,7 +909,7 @@ function sDay() {
       <div class="seg run">${[['', 'None'], ...RUN_TYPES.map((t) => [t, RUN_SHORT[t]])]
         .map(([v, l]) => `<button data-act="setDayRun" data-v="${v}" aria-pressed="${(d.run || '') === v}">${l}</button>`).join('')}</div>
     </div>
-    ${d.workout ? `<button class="btn btn-ghost" data-act="go" data-to="workout" data-id="${d.workout}">Edit ${esc(p.workouts[d.workout].name)}</button>` : ''}
+    ${d.workout ? `<button class="btn btn-ghost" data-act="editFromDay" data-id="${d.workout}">Edit ${esc(p.workouts[d.workout].name)}</button>` : ''}
     <button class="btn btn-primary" data-act="closeSheet" style="height:60px;font-size:24px">Done</button>`;
 }
 
@@ -920,7 +922,7 @@ function vWorkout(params) {
   const used = DAYS.filter((k) => p.days[k]?.workout === w.id).map((k) => DAY_LONG[k]).join(', ') || 'Not on any day yet';
   const names = Object.values(S.exercises).map((e) => e.name).sort((a, b) => a.localeCompare(b));
   return `
-    <div class="hrow">${backBtn('week')}<div class="small">${esc(used)}</div></div>
+    <div class="hrow"><button class="iconbtn" data-act="backFromWorkout" aria-label="Back">${I.back}</button><div class="small">${esc(used)}</div></div>
     <label class="field">Workout name<input class="input" data-change="wname" data-id="${w.id}" value="${esc(w.name)}" style="font-family:var(--cond);font-size:26px;font-weight:700"></label>
     ${w.items.length > 1 ? '<div class="small" style="margin-bottom:-8px">Drag ⠿ to reorder · tap to edit</div>' : ''}
     <div class="stack" data-sortable="ex" data-wid="${w.id}">${w.items.length
@@ -1796,7 +1798,20 @@ const A = {
     p.workouts[w.id] = w;
     p.days[ui.dayEdit] = { ...(p.days[ui.dayEdit] || {}), workout: w.id };
     save();
+    ui.editFromDay = ui.dayEdit;
     go('workout', { id: w.id });
+  },
+  // Opened from a day's panel on the Plan tab: Back returns to that panel.
+  editFromDay(d) {
+    ui.editFromDay = ui.dayEdit;
+    go('workout', { id: d.id });
+  },
+  backFromWorkout() {
+    const day = ui.editFromDay;
+    ui.editFromDay = null;
+    ui.weekTab = 'plan';
+    if (day) ui.reopen = () => { ui.dayEdit = day; openSheet(sDay); };
+    go('week');
   },
   delWorkout(d) {
     const p = cur();

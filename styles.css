@@ -204,29 +204,26 @@ select.input { appearance: none; -webkit-appearance: none; }
 .setnum .n { font-size: 112px; line-height: 1; }
 .setnum .x { font-size: 40px; color: var(--muted); }
 .setlabels { display: grid; grid-template-columns: 1fr 1fr; width: 100%; max-width: 280px; text-align: center; font-size: 16px; color: var(--muted); }
-.actions { display: grid; grid-template-columns: 1fr 2fr; gap: 12px; }
-.actions button { height: 86px; border-radius: 20px; font-family: var(--cond); font-size: 30px; font-weight: 700; text-transform: uppercase; }
-.btn-done { border: none; background: var(--lift); color: var(--bg); display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 36px !important; }
-/* Short phones (e.g. iPhone SE): smaller set card so Done stays on screen */
+/* One row under the set card: Different (pencil) · last week · last set · Done (tick) */
+.actrow { display: grid; grid-template-columns: 60px minmax(0, 1fr) minmax(0, 1fr) minmax(76px, 1.1fr); gap: 8px; }
+.actrow button { height: 76px; border-radius: 18px; display: flex; align-items: center; justify-content: center; }
+.act-diff { border: 2px solid var(--line); background: transparent; color: var(--text); }
+.act-quick { flex-direction: column; gap: 3px; border: 1px solid var(--line); background: var(--card); color: var(--muted); padding: 0 4px; }
+.act-quick b { font-family: var(--cond); font-size: 20px; font-weight: 700; color: var(--text); white-space: nowrap; }
+.act-quick:disabled { opacity: .4; }
+.act-done { border: none; background: var(--lift); color: var(--bg); }
+/* Short phones (e.g. iPhone SE): smaller set card so everything fits without scrolling */
 @media (max-height: 780px) {
   #app.full { gap: 12px; padding-top: calc(env(safe-area-inset-top) + 14px); }
   #app.full h1 { font-size: 38px; }
   .setcard { min-height: 150px; padding: 12px; gap: 4px; }
   .setnum .n { font-size: 76px; }
-  .quick button { min-height: 54px; }
-  .actions button { height: 72px; }
+  .actrow button { height: 68px; }
 }
-
-/* "Same as last week / last set" quick-log buttons above Different/Done */
-.quick { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.quick button {
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
-  min-height: 60px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 16px; background: var(--card); color: var(--text2);
-  font-size: 13px; font-weight: 600;
+@media (max-width: 350px) {
+  .actrow { grid-template-columns: 52px minmax(0, 1fr) minmax(0, 1fr) 68px; gap: 6px; }
+  .act-quick b { font-size: 17px; }
 }
-.quick button b { font-family: var(--cond); font-size: 22px; font-weight: 700; color: var(--text); }
-.quick button:disabled { opacity: .4; }
-.btn-miss { border: 2px solid var(--line); background: transparent; color: var(--text); font-size: 26px !important; }
 
 /* minmax(0, …) lets the columns shrink below the inputs' natural width on narrow phones */
 /* kg gets more room than reps ("52.5" vs "12") */
