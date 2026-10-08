@@ -242,7 +242,8 @@ function vToday() {
   const finished = L.weekOf(p.startDate, today()) > p.weeks;
   const notToday = ui.day && ui.day !== todayKey();
 
-  let h = `<div class="stack4">
+  let h = `${notToday ? `<button class="backtoday" data-act="setDay" data-day="${todayKey()}">${I.back} Back to today (${DAY_LONG[todayKey()]})</button>` : ''}
+    <div class="stack4">
       <div class="eyebrow">${DAY_LONG[key]}${notToday ? ' (picked)' : ''} · ${esc(weekLabel(p))}</div>
       <h1>${esc(w ? w.name : d.run ? RUN[d.run] : 'Rest day')}</h1>
     </div>`;
@@ -271,7 +272,7 @@ function vToday() {
       h += `<div class="stack">${w.items
         .map((it) => {
           const t = targetFor(it.exId, it);
-          return `<div class="row"><div><div class="name">${esc(exName(it.exId))}</div><div class="meta">${it.sets} sets · ${it.min}–${it.max} reps</div></div>
+          return `<div class="row exrow"><div><div class="name">${esc(exName(it.exId))}</div><div class="meta">${it.sets} sets · ${it.min}–${it.max} reps</div></div>
             <div class="big">${L.repsText(t.sets)} × ${fmtW(t.weight)}${kgUnit(t.weight)}</div></div>`;
         })
         .join('')}</div>`;
