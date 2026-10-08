@@ -263,10 +263,15 @@ function vToday() {
   h += S.sessions.filter((s) => s.date === today()).map(sessionCard).join('');
   h += S.runs.filter((r) => r.date === today()).map(runCard).join('');
 
-  if (w && liftDone) {
-    // Done earlier this week (today's are already shown above): no targets or Start.
+  const repeatNote = (s) => `<div class="hrow small lift" style="gap:6px;margin-top:-4px">${svg('<path d="M5 12.5l4.5 4.5L19 7.5"/>', 16, 3)}
+    Done ${s.doneOn === today() ? 'today' : DAY_LONG[DAYS[(L.parseDate(s.doneOn).getDay() + 6) % 7]]} · doing it again adds another session</div>`;
+
+  if (w && liftDone && !notToday) {
+    // Today's own workout already done this week (today's are shown above): no targets or Start.
     if (liftDone.ref.date !== today()) h += sessionCard(liftDone.ref);
   } else if (w) {
+    // A picked day can always be done, even if it was done earlier this week.
+    if (liftDone) h += repeatNote(liftDone);
     if (!w.items.length) {
       h += `<div class="empty">No exercises in ${esc(w.name)} yet.</div>
         <button class="btn btn-ghost" data-act="go" data-to="workout" data-id="${w.id}">Add exercises</button>`;
@@ -284,9 +289,10 @@ function vToday() {
     }
   }
 
-  if (d.run && runDone) {
+  if (d.run && runDone && !notToday) {
     if (runDone.ref.date !== today()) h += runCard(runDone.ref);
   } else if (d.run) {
+    if (runDone) h += repeatNote(runDone);
     const last = lastRun(d.run);
     h += `<div class="card">
         <div class="spread" style="align-items:center"><span class="tag run">${RUN[d.run]}</span>
