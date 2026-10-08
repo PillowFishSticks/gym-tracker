@@ -1,4 +1,4 @@
-# Gym Tracker
+# Sort It Out
 
 A simple hypertrophy and running tracker for your phone. Tap **Start**, do the set, tap **Done** — or **Different** if you got more or less than the target — and the app works out next week's target for you.
 

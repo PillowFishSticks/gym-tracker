@@ -1363,11 +1363,11 @@ function sBackup() {
 }
 
 async function exportData() {
-  const name = `gym-tracker-${today()}.json`;
+  const name = `sort-it-out-${today()}.json`;
   const file = new File([JSON.stringify(S)], name, { type: 'application/json' });
   try {
     if (navigator.canShare && navigator.canShare({ files: [file] }) && /Android|iPhone|iPad/i.test(navigator.userAgent)) {
-      await navigator.share({ files: [file], title: 'Gym Tracker backup' });
+      await navigator.share({ files: [file], title: 'Sort It Out backup' });
     } else {
       const a = document.createElement('a');
       a.href = URL.createObjectURL(file);
@@ -1897,7 +1897,7 @@ const CHG = {
         toast('Backup restored');
         go('today');
       } catch (e) {
-        toast('That file isn’t a Gym Tracker backup');
+        toast('That file isn’t a Sort It Out backup');
       }
     };
     r.readAsText(file);

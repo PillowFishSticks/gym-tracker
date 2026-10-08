@@ -1,6 +1,6 @@
 {
-  "name": "Gym Tracker",
-  "short_name": "Gym",
+  "name": "Sort It Out",
+  "short_name": "Sort It Out",
   "description": "Simple hypertrophy and running tracker. Data stays on your phone.",
   "start_url": "./",
   "scope": "./",
