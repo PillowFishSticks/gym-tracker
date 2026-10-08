@@ -52,6 +52,7 @@ const I = {
   back: svg('<path d="M15 6l-6 6 6 6"/>'),
   close: svg('<path d="M6 6l12 12M18 6L6 18"/>'),
   list: svg('<path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/>'),
+  bin: svg('<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>', 20),
   check: svg('<path d="M5 12.5l4.5 4.5L19 7.5"/>', 30, 3),
   chevron: svg('<path d="M9 6l6 6-6 6"/>', 18),
   plus: svg('<path d="M12 5v14M5 12h14"/>', 24, 3),
@@ -316,7 +317,8 @@ const tickIcon = () => svg('<path d="M5 12.5l4.5 4.5L19 7.5"/>', 22, 3);
 function sessionCard(s) {
   const sets = s.entries.reduce((n, e) => n + e.sets.length, 0);
   return `<div class="card done">
-      <div class="hrow lift" style="gap:8px"><span>${tickIcon()}</span><span class="cond" style="font-size:26px">${esc(s.workoutName)} complete</span></div>
+      <div class="hrow lift" style="gap:8px"><span>${tickIcon()}</span><span class="cond grow" style="font-size:26px">${esc(s.workoutName)} complete</span>
+        <button class="iconbtn delbtn" data-act="askDelSession" data-id="${s.id}" aria-label="Delete ${esc(s.workoutName)}">${I.bin}</button></div>
       <div class="small">Done ${doneWhen(s.date)} · ${sets} sets · ${s.minutes} min</div>
       <div class="stack4">${s.entries.map((e) => `<div class="line-item" style="padding:9px 0;min-height:0"><span>${esc(exName(e.exId))}</span><span class="muted">${esc(setsText(e.sets))}</span></div>`).join('')}</div>
     </div>`;
@@ -324,9 +326,33 @@ function sessionCard(s) {
 
 function runCard(r) {
   return `<div class="card done">
-      <div class="hrow runc" style="gap:8px"><span>${tickIcon()}</span><span class="cond" style="font-size:24px">${RUN[r.type]} logged</span></div>
+      <div class="hrow runc" style="gap:8px"><span>${tickIcon()}</span><span class="cond grow" style="font-size:24px">${RUN[r.type]} logged</span>
+        <button class="iconbtn delbtn" data-act="askDelRun" data-id="${r.id}" aria-label="Delete ${RUN[r.type].toLowerCase()}">${I.bin}</button></div>
       <div class="small">Done ${doneWhen(r.date)} · ${L.fmtKm(r.distKm)} km in ${L.fmtDuration(r.timeSec)} · ${L.fmtDuration(L.paceOf(r))}/km</div>
     </div>`;
+}
+
+// Confirmation panel: ui.ask = { title, body, yes, act, id }
+function sAsk() {
+  const a = ui.ask;
+  return `
+    <div class="stack4"><h2>${esc(a.title)}</h2><div class="sub">${esc(a.body)}</div></div>
+    <div class="grid2">
+      <button class="btn btn-ghost" data-act="closeSheet">Cancel</button>
+      <button class="btn btn-delete" data-act="${a.act}" data-id="${a.id}">${esc(a.yes)}</button>
+    </div>`;
+}
+
+// Remove a logged workout. Exercises it moved on get their previous target back,
+// as long as nothing newer has been logged for them since.
+function deleteSession(id) {
+  const s = S.sessions.find((x) => x.id === id);
+  if (!s) return;
+  S.sessions = S.sessions.filter((x) => x !== s);
+  for (const e of s.entries) {
+    const newer = S.sessions.some((x) => x.date >= s.date && x.entries.some((y) => y.exId === e.exId));
+    if (!newer && e.target) S.targets[e.exId] = { weight: e.target.weight, reps: e.target.reps, sets: e.target.sets, miss: 0 };
+  }
 }
 
 function sPickDay() {
@@ -1591,6 +1617,30 @@ const A = {
     else go('archive');
   },
 
+  askDelSession(d) {
+    const s = S.sessions.find((x) => x.id === d.id);
+    ui.ask = { title: `Delete ${s.workoutName}?`, body: 'This removes the sets you logged in this workout, and next time’s targets go back to what they were before it. This can’t be undone.', yes: 'Delete', act: 'delSession', id: d.id };
+    openSheet(sAsk);
+  },
+  delSession(d) {
+    deleteSession(d.id);
+    save();
+    closeSheet();
+    toast('Workout deleted');
+    render();
+  },
+  askDelRun(d) {
+    const r = S.runs.find((x) => x.id === d.id);
+    ui.ask = { title: `Delete ${RUN[r.type].toLowerCase()}?`, body: `${L.fmtKm(r.distKm)} km in ${L.fmtDuration(r.timeSec)}. This can’t be undone.`, yes: 'Delete', act: 'delRunNow', id: d.id };
+    openSheet(sAsk);
+  },
+  delRunNow(d) {
+    S.runs = S.runs.filter((x) => x.id !== d.id);
+    save();
+    closeSheet();
+    toast('Run deleted');
+    render();
+  },
   weekTab(d) {
     ui.weekTab = d.v;
     render();
