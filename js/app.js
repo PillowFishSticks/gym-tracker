@@ -260,19 +260,14 @@ function vToday() {
   const ws = weekStatus(p);
   const liftDone = ws.slots.find((s) => s.day === key && s.kind === 'lift' && s.doneOn);
   const runDone = ws.slots.find((s) => s.day === key && s.kind === 'run' && s.doneOn);
-  const when = (iso) => (iso === today() ? 'today' : `on ${DAY_LONG[DAYS[(L.parseDate(iso).getDay() + 6) % 7]]}`);
-  const tick = svg('<path d="M5 12.5l4.5 4.5L19 7.5"/>', 22, 3);
+  // Everything finished today stays on screen, whichever day it was planned for,
+  // so doing another day's workout or a run adds to the list instead of replacing it.
+  h += S.sessions.filter((s) => s.date === today()).map(sessionCard).join('');
+  h += S.runs.filter((r) => r.date === today()).map(runCard).join('');
 
   if (w && liftDone) {
-    // Already done this week: show what was done instead of the targets and Start.
-    const s = liftDone.ref;
-    const sets = s.entries.reduce((n, e) => n + e.sets.length, 0);
-    h += `<div class="card done">
-        <div class="hrow lift" style="gap:8px"><span>${tick}</span><span class="cond" style="font-size:26px">Workout complete</span></div>
-        <div class="small">Done ${when(s.date)} · ${sets} sets · ${s.minutes} min</div>
-        <div class="stack4">${s.entries.map((e) => `<div class="line-item" style="padding:9px 0;min-height:0"><span>${esc(exName(e.exId))}</span><span class="muted">${esc(setsText(e.sets))}</span></div>`).join('')}</div>
-      </div>
-      ${S.active ? '' : `<button class="linkbtn" data-act="start" data-id="${w.id}" style="color:var(--muted);font-weight:500">Do it again</button>`}`;
+    // Done earlier this week (today's are already shown above): no targets or Start.
+    if (liftDone.ref.date !== today()) h += sessionCard(liftDone.ref);
   } else if (w) {
     if (!w.items.length) {
       h += `<div class="empty">No exercises in ${esc(w.name)} yet.</div>
@@ -290,12 +285,7 @@ function vToday() {
   }
 
   if (d.run && runDone) {
-    const r = runDone.ref;
-    h += `<div class="card done">
-        <div class="hrow runc" style="gap:8px"><span>${tick}</span><span class="cond" style="font-size:24px">${RUN[d.run]} logged</span></div>
-        <div class="small">Done ${when(r.date)} · ${L.fmtKm(r.distKm)} km in ${L.fmtDuration(r.timeSec)} · ${L.fmtDuration(L.paceOf(r))}/km</div>
-      </div>
-      <button class="linkbtn" data-act="logRun" data-type="${d.run}" style="color:var(--muted);font-weight:500">Log another run</button>`;
+    if (runDone.ref.date !== today()) h += runCard(runDone.ref);
   } else if (d.run) {
     const last = lastRun(d.run);
     h += `<div class="card">
@@ -317,6 +307,26 @@ function vToday() {
   }
   h += `<button class="btn btn-ghost" data-act="pickDay">Do a different day</button>`;
   return h;
+}
+
+const doneWhen = (iso) => (iso === today() ? 'today' : `on ${DAY_LONG[DAYS[(L.parseDate(iso).getDay() + 6) % 7]]}`);
+const tickIcon = () => svg('<path d="M5 12.5l4.5 4.5L19 7.5"/>', 22, 3);
+
+// A finished workout: what was done on each exercise.
+function sessionCard(s) {
+  const sets = s.entries.reduce((n, e) => n + e.sets.length, 0);
+  return `<div class="card done">
+      <div class="hrow lift" style="gap:8px"><span>${tickIcon()}</span><span class="cond" style="font-size:26px">${esc(s.workoutName)} complete</span></div>
+      <div class="small">Done ${doneWhen(s.date)} · ${sets} sets · ${s.minutes} min</div>
+      <div class="stack4">${s.entries.map((e) => `<div class="line-item" style="padding:9px 0;min-height:0"><span>${esc(exName(e.exId))}</span><span class="muted">${esc(setsText(e.sets))}</span></div>`).join('')}</div>
+    </div>`;
+}
+
+function runCard(r) {
+  return `<div class="card done">
+      <div class="hrow runc" style="gap:8px"><span>${tickIcon()}</span><span class="cond" style="font-size:24px">${RUN[r.type]} logged</span></div>
+      <div class="small">Done ${doneWhen(r.date)} · ${L.fmtKm(r.distKm)} km in ${L.fmtDuration(r.timeSec)} · ${L.fmtDuration(L.paceOf(r))}/km</div>
+    </div>`;
 }
 
 function sPickDay() {
@@ -456,6 +466,7 @@ function finishWorkout() {
   });
   const minutes = Math.max(1, Math.round((Date.now() - a.started) / 60000));
   S.sessions.push({ id: uid(), date: a.date, programId: a.programId, workoutId: a.workoutId, workoutName: a.workoutName, minutes, entries });
+  ui.day = null; // back on Today, everything done today is listed together
   S.lastSummary = { name: a.workoutName, sets: entries.reduce((n, e) => n + e.sets.length, 0), minutes, items };
   save();
   go('summary');
@@ -1529,6 +1540,7 @@ const A = {
     if (!dist || !time) return toast('Enter distance and time (or pace)');
     S.runs.push({ id: uid(), date: f.date || today(), programId: cur()?.id || null, type: f.type, distKm: dist, timeSec: time });
     ui.runForm = null;
+    ui.day = null;
     save();
     toast('Run saved');
     render(true);
