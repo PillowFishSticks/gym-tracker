@@ -136,6 +136,7 @@ const I = {
   back: svg('<path d="M15 6l-6 6 6 6"/>'),
   close: svg('<path d="M6 6l12 12M18 6L6 18"/>'),
   list: svg('<path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/>'),
+  undo: svg('<path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>'),
   bin: svg('<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>', 20),
   check: svg('<path d="M5 12.5l4.5 4.5L19 7.5"/>', 30, 3),
   chevron: svg('<path d="M9 6l6 6-6 6"/>', 18),
@@ -490,7 +491,10 @@ function vTrain() {
     <div class="spread" style="align-items:center">
       <button class="iconbtn" data-act="endWorkout" aria-label="End workout">${I.close}</button>
       <button class="linkbtn" data-act="pickEx" style="color:var(--muted);font-weight:500">Exercise ${a.ex + 1} of ${a.items.length}</button>
-      <button class="iconbtn" data-act="pickEx" aria-label="Choose which exercise to do next">${I.list}</button>
+      <span class="hrow" style="gap:8px">
+        <button class="iconbtn" data-act="undo" aria-label="Undo last set" ${a.hist.length ? '' : 'disabled'}>${I.undo}</button>
+        <button class="iconbtn" data-act="pickEx" aria-label="Choose which exercise to do next">${I.list}</button>
+      </span>
     </div>
     <div class="stack4">
       ${it.group ? `<div><span class="tag lift">Superset${(() => { const n = nextInSuperset(a, it); return n ? ` · next: ${esc(exName(n.exId))}` : ' · last one'; })()}</span></div>` : ''}
@@ -516,8 +520,7 @@ function vTrain() {
     <div class="actions">
       <button class="btn-miss" data-act="missed">Different</button>
       <button class="btn-done" data-act="done">${I.check}Done</button>
-    </div>
-    ${a.hist.length ? '<button class="linkbtn" data-act="undo">Undo last set</button>' : ''}`;
+    </div>`;
 }
 
 // Logs are keyed by each item's `k` (not its position) so skipped exercises can move to the end.

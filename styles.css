@@ -147,6 +147,7 @@ h2 { margin: 0; font-family: var(--cond); font-size: 30px; line-height: 1.05; fo
 .btn-small { height: 44px; font-size: 15px; }
 .btn-delete { background: var(--miss); color: var(--bg); font-weight: 700; }
 .delbtn { background: transparent; color: var(--muted); margin: -8px -8px -8px 0; }
+.iconbtn:disabled { opacity: .35; }
 .iconbtn {
   width: 44px; height: 44px; flex-shrink: 0; border: none; border-radius: 12px;
   background: var(--card); color: var(--text2); display: flex; align-items: center; justify-content: center;
@@ -207,9 +208,13 @@ select.input { appearance: none; -webkit-appearance: none; }
 .actions button { height: 86px; border-radius: 20px; font-family: var(--cond); font-size: 30px; font-weight: 700; text-transform: uppercase; }
 .btn-done { border: none; background: var(--lift); color: var(--bg); display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 36px !important; }
 /* Short phones (e.g. iPhone SE): smaller set card so Done stays on screen */
-@media (max-height: 720px) {
-  .setcard { min-height: 180px; padding: 14px; }
-  .setnum .n { font-size: 84px; }
+@media (max-height: 780px) {
+  #app.full { gap: 12px; padding-top: calc(env(safe-area-inset-top) + 14px); }
+  #app.full h1 { font-size: 38px; }
+  .setcard { min-height: 150px; padding: 12px; gap: 4px; }
+  .setnum .n { font-size: 76px; }
+  .quick button { min-height: 54px; }
+  .actions button { height: 72px; }
 }
 
 /* "Same as last week / last set" quick-log buttons above Different/Done */
