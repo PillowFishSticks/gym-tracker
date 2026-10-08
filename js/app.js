@@ -300,11 +300,11 @@ function vToday() {
     h += `<p class="sub">Nothing planned${notToday ? '' : ' today'}.</p>
       <button class="btn btn-ghost" data-act="daySheet" data-day="${key}">Plan ${DAY_LONG[key]}</button>`;
   }
-  // Anything else still to do this week, one tap to do it now instead.
+  // What's still to do this week, for reference only (change days on Program → This week).
   const left = ws.slots.filter((s) => !s.doneOn && s.day !== key);
   if (left.length && !finished) {
     h += `<div class="stack4" style="margin-top:4px"><div class="eyebrow">Left this week</div>
-      <div class="tags" style="gap:8px">${left.map((s) => `<button class="tag ${s.kind === 'run' ? 'run' : 'lift'} todo" data-act="doDay" data-day="${s.day}" style="border:none;min-height:40px;padding:8px 12px">${esc(s.name)} <span style="font-weight:500;opacity:.75">${DAY_LONG[s.day].slice(0, 3)}</span></button>`).join('')}</div></div>`;
+      <div class="tags" style="gap:8px">${left.map((s) => `<span class="tag ${s.kind === 'run' ? 'run' : 'lift'} todo">${esc(s.name)} <span style="font-weight:500;opacity:.75">${DAY_LONG[s.day].slice(0, 3)}</span></span>`).join('')}</div></div>`;
   }
   h += `<button class="btn btn-ghost" data-act="pickDay">Do a different day</button>`;
   return h;
