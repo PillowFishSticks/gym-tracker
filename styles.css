@@ -137,8 +137,11 @@ h2 { margin: 0; font-family: var(--cond); font-size: 30px; line-height: 1.05; fo
 }
 .linkbtn { display: inline-flex; align-items: center; gap: 2px; background: none; border: none; color: var(--lift); font-size: 15px; font-weight: 600; padding: 10px 0; }
 
-.seg { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 6px; background: var(--card); border-radius: 14px; padding: 5px; }
-.seg button { height: 46px; border: none; border-radius: 10px; background: transparent; color: var(--text2); font-size: 16px; font-weight: 600; }
+/* Buttons share the row by label length, so "Threshold" gets more room than "Long". */
+.seg { display: flex; gap: 6px; background: var(--card); border-radius: 14px; padding: 5px; }
+.seg button { flex: 1 1 auto; height: 46px; min-width: 0; padding: 0 8px; border: none; border-radius: 10px; background: transparent; color: var(--text2); font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.seg:has(> :nth-child(4)) button { font-size: 15px; padding: 0 6px; } /* 4+ options, e.g. None/Threshold/Long/Easy */
+.sheet .seg { background: var(--bg); }
 .seg button[aria-pressed="true"] { background: var(--text); color: var(--bg); }
 .seg.run button[aria-pressed="true"] { background: var(--run); }
 .chips { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
