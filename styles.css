@@ -84,6 +84,7 @@ h2 { margin: 0; font-family: var(--cond); font-size: 30px; line-height: 1.05; fo
 .row .big { font-family: var(--cond); font-size: 24px; font-weight: 700; white-space: nowrap; }
 .unit { font-size: 15px; color: var(--muted); font-family: 'Barlow', sans-serif; font-weight: 500; }
 .card { background: var(--card); border-radius: 18px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.card.done { gap: 8px; }
 .line-item {
   display: flex; justify-content: space-between; align-items: center; gap: 12px;
   padding: 12px 2px; border-bottom: 1px solid var(--line2); min-height: 48px;

@@ -115,7 +115,7 @@ function setsText(sets) {
   const ws = new Set(sets.map((s) => s.weight));
   if (ws.size === 1) {
     const w = sets[0].weight;
-    return `${sets.map((s) => s.reps).join(', ')} × ${fmtW(w)}${w ? ' kg' : ''}`;
+    return `${sets.map((s) => s.reps).join(' / ')} × ${fmtW(w)}${w ? ' kg' : ''}`;
   }
   return sets.map((s) => `${s.reps}×${fmtW(s.weight)}`).join(', ');
 }
@@ -258,13 +258,22 @@ function vToday() {
   if (S.active) h += `<button class="btn btn-primary" data-act="go" data-to="train">Resume workout</button>`;
 
   const ws = weekStatus(p);
-  const doneHere = ws.slots.filter((s) => s.day === key && s.doneOn);
-  if (doneHere.length) {
-    h += `<div class="hrow lift" style="gap:8px;font-weight:600;margin-top:-6px">${svg('<path d="M5 12.5l4.5 4.5L19 7.5"/>', 18, 3)}
-      ${doneHere.map((s) => `${esc(s.name)} done ${s.doneOn === today() ? 'today' : dayShort(s.doneOn)}`).join(' and ')}</div>`;
-  }
+  const liftDone = ws.slots.find((s) => s.day === key && s.kind === 'lift' && s.doneOn);
+  const runDone = ws.slots.find((s) => s.day === key && s.kind === 'run' && s.doneOn);
+  const when = (iso) => (iso === today() ? 'today' : `on ${DAY_LONG[DAYS[(L.parseDate(iso).getDay() + 6) % 7]]}`);
+  const tick = svg('<path d="M5 12.5l4.5 4.5L19 7.5"/>', 22, 3);
 
-  if (w) {
+  if (w && liftDone) {
+    // Already done this week: show what was done instead of the targets and Start.
+    const s = liftDone.ref;
+    const sets = s.entries.reduce((n, e) => n + e.sets.length, 0);
+    h += `<div class="card done">
+        <div class="hrow lift" style="gap:8px"><span>${tick}</span><span class="cond" style="font-size:26px">Workout complete</span></div>
+        <div class="small">Done ${when(s.date)} · ${sets} sets · ${s.minutes} min</div>
+        <div class="stack4">${s.entries.map((e) => `<div class="line-item" style="padding:9px 0;min-height:0"><span>${esc(exName(e.exId))}</span><span class="muted">${esc(setsText(e.sets))}</span></div>`).join('')}</div>
+      </div>
+      ${S.active ? '' : `<button class="linkbtn" data-act="start" data-id="${w.id}" style="color:var(--muted);font-weight:500">Do it again</button>`}`;
+  } else if (w) {
     if (!w.items.length) {
       h += `<div class="empty">No exercises in ${esc(w.name)} yet.</div>
         <button class="btn btn-ghost" data-act="go" data-to="workout" data-id="${w.id}">Add exercises</button>`;
@@ -280,7 +289,14 @@ function vToday() {
     }
   }
 
-  if (d.run) {
+  if (d.run && runDone) {
+    const r = runDone.ref;
+    h += `<div class="card done">
+        <div class="hrow runc" style="gap:8px"><span>${tick}</span><span class="cond" style="font-size:24px">${RUN[d.run]} logged</span></div>
+        <div class="small">Done ${when(r.date)} · ${L.fmtKm(r.distKm)} km in ${L.fmtDuration(r.timeSec)} · ${L.fmtDuration(L.paceOf(r))}/km</div>
+      </div>
+      <button class="linkbtn" data-act="logRun" data-type="${d.run}" style="color:var(--muted);font-weight:500">Log another run</button>`;
+  } else if (d.run) {
     const last = lastRun(d.run);
     h += `<div class="card">
         <div class="spread" style="align-items:center"><span class="tag run">${RUN[d.run]}</span>
@@ -496,12 +512,12 @@ function weekStatus(p) {
     if (d.workout && p.workouts[d.workout]) {
       const s = sessions.find((x) => x.workoutId === d.workout && !usedS.has(x.id));
       if (s) usedS.add(s.id);
-      slots.push({ day: k, date, kind: 'lift', key: d.workout, name: p.workouts[d.workout].name, doneOn: s ? s.date : null });
+      slots.push({ day: k, date, kind: 'lift', key: d.workout, name: p.workouts[d.workout].name, doneOn: s ? s.date : null, ref: s || null });
     }
     if (d.run) {
       const r = runs.find((x) => x.type === d.run && !usedR.has(x.id));
       if (r) usedR.add(r.id);
-      slots.push({ day: k, date, kind: 'run', key: d.run, name: RUN[d.run], doneOn: r ? r.date : null });
+      slots.push({ day: k, date, kind: 'run', key: d.run, name: RUN[d.run], doneOn: r ? r.date : null, ref: r || null });
     }
   });
   const extras = [
