@@ -25,7 +25,7 @@ Exercises are remembered across programs, so adding "Leg press" to a new program
 
 ## Runs
 
-Three types: threshold, long and easy. Enter any two of distance, time and pace and the third is filled in. Each run is compared with your last one of the same type.
+Three types: threshold, long and easy. Enter any two of distance, time and pace and the third is filled in. Each run is compared with your last one of the same type, and progress is judged on pace (faster = better) for every run type.
 
 ## Programs
 

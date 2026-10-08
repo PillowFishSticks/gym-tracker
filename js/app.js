@@ -127,13 +127,9 @@ function weekLabel(p) {
   return `Week ${w} of ${p.weeks}`;
 }
 
-// Long runs are judged on distance, the others on pace.
+// Every run type is judged on pace (faster = better); within 2 s/km counts as the same.
 function runDir(a, b) {
   if (!a || !b) return 'same';
-  if (a.type === 'long') {
-    const d = a.distKm - b.distKm;
-    return Math.abs(d) < 0.05 ? 'same' : d > 0 ? 'up' : 'down';
-  }
   const d = L.paceOf(a) - L.paceOf(b);
   return Math.abs(d) < 2 ? 'same' : d < 0 ? 'up' : 'down';
 }
@@ -711,17 +707,13 @@ function liftChangeText(c) {
   return parts.join(' · ') || 'no change';
 }
 
-// Long runs are judged on distance, the others on pace.
+// Every run type is judged on pace (faster = better); within 2 s/km counts as the same.
 function runChange(rs) {
   if (rs.length < 2) return null;
   return { dir: runDir(rs.at(-1), rs[0]), a: rs[0], b: rs.at(-1) };
 }
 function runChangeText(type, c) {
   if (!c) return '';
-  if (type === 'long') {
-    const d = c.b.distKm - c.a.distKm;
-    return Math.abs(d) < 0.05 ? 'no change' : `${d > 0 ? '+' : '−'}${L.fmtKm(Math.abs(d))} km`;
-  }
   const d = L.paceOf(c.b) - L.paceOf(c.a);
   return Math.abs(d) < 2 ? 'no change' : `${Math.round(Math.abs(d))} s/km ${d < 0 ? 'faster' : 'slower'}`;
 }
@@ -1086,11 +1078,11 @@ function archListHtml() {
       <span style="font-weight:600;color:${ya != null && now > ya ? LIME : 'var(--text2)'}">${fmtW(now)}${now ? ' kg' : ''}</span></button>`);
   }
   for (const t of RUN_TYPES) {
-    const label = t === 'long' ? 'Long run' : `${RUN_SHORT[t]} pace`;
+    const label = `${RUN_SHORT[t]} pace`;
     if (q && !`${label} ${RUN[t]}`.toLowerCase().includes(q)) continue;
     const rs = runsOf(t);
     if (!rs.length) continue;
-    const val = (r) => (t === 'long' ? `${L.fmtKm(r.distKm)} km` : `${L.fmtDuration(L.paceOf(r))}/km`);
+    const val = (r) => `${L.fmtDuration(L.paceOf(r))}/km`;
     const ya = yearAgo(rs, val);
     rows.push(`<button class="line-item" data-act="go" data-to="runtype" data-type="${t}" style="display:grid;grid-template-columns:1fr 84px 84px;gap:8px">
       <span style="font-size:16px;font-weight:500;color:${BLUE}">${label}</span>
