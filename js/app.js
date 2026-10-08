@@ -2,7 +2,7 @@ import { load, save as persist, uid, blank } from './store.js';
 import * as L from './logic.js';
 
 let S = load();
-const ui = { day: null, sheet: null, runForm: null, np: null, archiveTab: 'exercises', archiveQ: '' };
+const ui = { day: null, sheet: null, runForm: null, np: null, archiveTab: 'exercises', archiveQ: '', range: '3m' };
 const $app = document.getElementById('app');
 const $sheet = document.getElementById('sheet');
 
@@ -157,6 +157,7 @@ function go(name, params) {
 
 window.addEventListener('hashchange', () => {
   ui.sheet = null;
+  ui.showAll = false;
   render(true);
 });
 
@@ -216,22 +217,6 @@ const stepper = (act, field, val, label, cls, obj) => `
 const backBtn = (to) => `<button class="iconbtn" data-act="${to ? 'go' : 'back'}" ${to ? `data-to="${to}"` : ''} aria-label="Back">${I.back}</button>`;
 
 // ---------- charts ----------
-
-function lineChart(vals, color, invert, label) {
-  const W = 320, H = 120, P = 8;
-  const min = Math.min(...vals), max = Math.max(...vals), span = max - min;
-  const x = (i) => (vals.length === 1 ? W / 2 : P + ((W - 2 * P) * i) / (vals.length - 1));
-  const y = (v) => {
-    if (!span) return H / 2;
-    const f = (v - min) / span;
-    return H - P - (H - 2 * P) * (invert ? 1 - f : f);
-  };
-  const pts = vals.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
-  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(label)}">
-    <polyline points="${pts}" fill="none" stroke="${color}" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
-    ${vals.map((v, i) => `<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="${i === vals.length - 1 ? 5 : 3.5}" fill="${color}"/>`).join('')}
-  </svg>`;
-}
 
 function barChart(items) {
   const max = Math.max(...items.map((i) => i.value)) || 1;
@@ -688,10 +673,96 @@ function sRun() {
 
 // ---------- progress ----------
 
-function exTrend(exId) {
-  const ss = exSessions(exId);
-  if (ss.length < 2) return 'same';
-  return cmpSets(L.bestSet(ss.at(-1).sets), L.bestSet(ss.at(-2).sets));
+const RANGES = [['2w', '2W', 14], ['1m', '1M', 30], ['3m', '3M', 91], ['1y', '1Y', 365], ['all', 'All', 0]];
+const RANGE_TEXT = { '2w': 'last 2 weeks', '1m': 'last month', '3m': 'last 3 months', '1y': 'last year', all: 'all time' };
+
+function rangeStart() {
+  const r = RANGES.find((x) => x[0] === ui.range);
+  return r && r[2] ? L.addDays(today(), -r[2]) : null;
+}
+function inRange(list) {
+  const s = rangeStart();
+  return s ? list.filter((x) => x.date >= s) : list;
+}
+const rangeSeg = () => `<div class="seg" role="group" aria-label="Time period">${RANGES
+  .map(([k, l]) => `<button data-act="setRange" data-v="${k}" aria-pressed="${ui.range === k}">${l}</button>`).join('')}</div>`;
+
+const dirCls = (dir) => (dir === 'up' ? 'lift' : dir === 'down' ? 'missc' : '');
+
+// First vs last session inside the period (list is oldest first).
+function liftChange(ss) {
+  if (ss.length < 2) return null;
+  const a = L.bestSet(ss[0].sets), b = L.bestSet(ss.at(-1).sets);
+  return { dir: cmpSets(b, a), a, b };
+}
+function liftChangeText(c) {
+  if (!c) return '';
+  if (c.b.weight !== c.a.weight) {
+    const d = L.round(c.b.weight - c.a.weight);
+    return `${d > 0 ? '+' : '−'}${Math.abs(d)} kg`;
+  }
+  const r = c.b.reps - c.a.reps;
+  return r ? `${r > 0 ? '+' : '−'}${Math.abs(r)} rep${Math.abs(r) === 1 ? '' : 's'}` : 'no change';
+}
+
+// Long runs are judged on distance, the others on pace.
+function runChange(rs) {
+  if (rs.length < 2) return null;
+  return { dir: runDir(rs.at(-1), rs[0]), a: rs[0], b: rs.at(-1) };
+}
+function runChangeText(type, c) {
+  if (!c) return '';
+  if (type === 'long') {
+    const d = c.b.distKm - c.a.distKm;
+    return Math.abs(d) < 0.05 ? 'no change' : `${d > 0 ? '+' : '−'}${L.fmtKm(Math.abs(d))} km`;
+  }
+  const d = L.paceOf(c.b) - L.paceOf(c.a);
+  return Math.abs(d) < 2 ? 'no change' : `${Math.round(Math.abs(d))} s/km ${d < 0 ? 'faster' : 'slower'}`;
+}
+
+// Line chart on a real date axis from the start of the period to today.
+function timeChart(points, { color, invert, fmt, label }) {
+  const W = 320, H = 160, PL = 44, PR = 12, PT = 12, PB = 26;
+  const start = rangeStart() || points[0].date;
+  const t0 = L.parseDate(start).getTime();
+  const t1 = L.parseDate(today()).getTime();
+  const span = Math.max(t1 - t0, 86400000);
+  const vals = points.map((p) => p.v);
+  let min = Math.min(...vals), max = Math.max(...vals);
+  if (max - min < 1e-9) {
+    const pad = Math.max(Math.abs(max) * 0.05, 1);
+    min -= pad;
+    max += pad;
+  }
+  const x = (d) => PL + ((W - PL - PR) * (L.parseDate(d).getTime() - t0)) / span;
+  const y = (v) => {
+    const f = (v - min) / (max - min);
+    return PT + (H - PT - PB) * (invert ? f : 1 - f);
+  };
+  const long = span > 200 * 86400000;
+  const dl = (d) => esc(long ? L.parseDate(d).toLocaleDateString('en-GB', { month: 'short', year: '2-digit' }) : L.fmtDate(d));
+  const mid = L.isoDate(new Date((t0 + t1) / 2));
+  const txt = (xx, yy, s, anchor = 'start') =>
+    `<text x="${xx}" y="${yy}" fill="${GREY}" font-size="11" font-family="Barlow, sans-serif" text-anchor="${anchor}">${s}</text>`;
+  const pts = points.map((p) => `${x(p.date).toFixed(1)},${y(p.v).toFixed(1)}`).join(' ');
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(label)}">
+    <line x1="${PL}" y1="${PT}" x2="${W - PR}" y2="${PT}" stroke="#2C2F35"/>
+    <line x1="${PL}" y1="${H - PB}" x2="${W - PR}" y2="${H - PB}" stroke="#2C2F35"/>
+    ${txt(0, PT + 4, fmt(invert ? min : max))}${txt(0, H - PB + 4, fmt(invert ? max : min))}
+    ${txt(PL, H - 6, dl(start))}${txt((PL + W - PR) / 2, H - 6, dl(mid), 'middle')}${txt(W - PR, H - 6, dl(today()), 'end')}
+    ${points.length > 1 ? `<polyline points="${pts}" fill="none" stroke="${color}" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>` : ''}
+    ${points.map((p, i) => `<circle cx="${x(p.date).toFixed(1)}" cy="${y(p.v).toFixed(1)}" r="${i === points.length - 1 ? 5 : 3.5}" fill="${color}"/>`).join('')}
+  </svg>`;
+}
+
+const dateLong = (d) => L.fmtDate(d, { weekday: 'short', ...(ui.range === '1y' || ui.range === 'all' ? { year: 'numeric' } : {}) });
+
+// Long lists show the latest 20 until "Show all" is tapped (reset on every screen change).
+function capList(items, row) {
+  const shown = ui.showAll ? items : items.slice(0, 20);
+  return shown.map(row).join('') + (items.length > shown.length
+    ? `<button class="btn btn-ghost btn-small" data-act="showAll" style="margin-top:8px">Show all ${items.length}</button>`
+    : '');
 }
 
 function vProgress() {
@@ -706,27 +777,41 @@ function vProgress() {
 
   const lifts = ids.length
     ? ids.map((id) => {
-        const last = L.bestSet(exSessions(id).at(-1).sets);
+        const all = exSessions(id);
+        const ss = inRange(all);
+        const last = all.at(-1);
+        const best = L.bestSet(last.sets);
+        const c = liftChange(ss);
         return `<button class="line-item" data-act="go" data-to="exercise" data-id="${id}">
-          <span style="font-size:17px;font-weight:500">${esc(exName(id))}</span>
-          <span class="hrow" style="gap:8px;color:var(--text2)">${last.reps} × ${fmtW(last.weight)}${last.weight ? ' kg' : ''} ${arrow(exTrend(id))}</span></button>`;
+          <span class="stack4" style="gap:2px"><span style="font-size:17px;font-weight:500">${esc(exName(id))}</span><span class="small">Last ${esc(dateLong(last.date))}</span></span>
+          <span class="stack4" style="gap:2px;align-items:flex-end">
+            <span class="hrow" style="gap:6px;color:var(--text2)">${best.reps} × ${fmtW(best.weight)}${best.weight ? ' kg' : ''} ${arrow(c ? c.dir : 'same')}</span>
+            <span class="small ${c ? dirCls(c.dir) : ''}">${c ? liftChangeText(c) : ss.length ? '1 session' : 'none in period'}</span>
+          </span></button>`;
       }).join('')
     : '<div class="empty">Finish a workout and your lifts show up here.</div>';
 
   const runs = runTypes.length
     ? runTypes.map((t) => {
-        const rs = runsOf(t);
-        const r = rs.at(-1);
+        const all = runsOf(t);
+        const rs = inRange(all);
+        const r = all.at(-1);
+        const c = runChange(rs);
         return `<button class="line-item" data-act="go" data-to="runtype" data-type="${t}">
-          <span style="font-size:17px;font-weight:500;color:${BLUE}">${RUN_SHORT[t]}</span>
-          <span class="hrow" style="gap:8px;color:var(--text2)">${L.fmtKm(r.distKm)} km · ${L.fmtDuration(L.paceOf(r))}/km ${arrow(runDir(r, rs.at(-2)))}</span></button>`;
+          <span class="stack4" style="gap:2px"><span style="font-size:17px;font-weight:500;color:${BLUE}">${RUN_SHORT[t]}</span><span class="small">Last ${esc(dateLong(r.date))}</span></span>
+          <span class="stack4" style="gap:2px;align-items:flex-end">
+            <span class="hrow" style="gap:6px;color:var(--text2)">${L.fmtKm(r.distKm)} km · ${L.fmtDuration(L.paceOf(r))}/km ${arrow(c ? c.dir : 'same')}</span>
+            <span class="small ${c ? dirCls(c.dir) : ''}">${c ? runChangeText(t, c) : rs.length ? '1 run' : 'none in period'}</span>
+          </span></button>`;
       }).join('')
     : '<div class="empty">Logged runs show up here.</div>';
 
   return `
     <div class="spread" style="align-items:center"><h1>Progress</h1><button class="linkbtn" data-act="go" data-to="archive">Archive ${I.chevron}</button></div>
+    ${rangeSeg()}
+    <div class="small" style="margin-top:-8px">Arrows and changes compare your first and latest session in the ${RANGE_TEXT[ui.range]}.</div>
     <div class="stack4"><div class="eyebrow">Lifts${p ? ' · this program' : ''}</div>${lifts}</div>
-    <div class="stack4"><div class="eyebrow">Runs · latest</div>${runs}</div>`;
+    <div class="stack4"><div class="eyebrow">Runs</div>${runs}</div>`;
 }
 
 function yearAgo(list, pick) {
@@ -738,7 +823,7 @@ function yearAgo(list, pick) {
 function vExercise(params) {
   const ex = S.exercises[params.id];
   if (!ex) return vProgress();
-  const ss = exSessions(ex.id);
+  const all = exSessions(ex.id);
   const t = S.targets[ex.id];
   let h = `<div class="hrow">${backBtn()}</div><h1>${esc(ex.name)}</h1>`;
   if (t) {
@@ -746,19 +831,26 @@ function vExercise(params) {
       <div class="spread" style="align-items:center"><span class="cond" style="font-size:40px">${t.reps} × ${fmtW(t.weight)}${kgUnit(t.weight)}</span>
       <button class="linkbtn" data-act="editTarget" data-ex="${ex.id}">Change</button></div></div>`;
   }
-  if (!ss.length) return h + '<div class="empty">No sets logged yet.</div>';
+  if (!all.length) return h + '<div class="empty">No sets logged yet.</div>';
 
-  const recent = ss.slice(-16);
-  const bests = recent.map((s) => L.bestSet(s.sets));
-  h += `<div class="card">
-    <div class="spread"><span class="eyebrow">Top weight per session</span><span class="small">${ss.length} session${ss.length === 1 ? '' : 's'}</span></div>
-    ${lineChart(bests.map((b) => b.weight), LIME, false, `${ex.name} top weight over the last ${recent.length} sessions`)}
-    <div class="spread small"><span>${esc(L.fmtDate(recent[0].date))} · ${bests[0].reps} × ${fmtW(bests[0].weight)}</span><span>${esc(L.fmtDate(recent.at(-1).date))} · ${bests.at(-1).reps} × ${fmtW(bests.at(-1).weight)}</span></div>
-  </div>`;
+  h += rangeSeg();
+  const ss = inRange(all);
+  if (!ss.length) {
+    h += `<div class="empty">Nothing in the ${RANGE_TEXT[ui.range]}. Last session: ${esc(L.fmtDate(all.at(-1).date, { year: 'numeric' }))}.</div>`;
+  } else {
+    const c = liftChange(ss);
+    const first = L.bestSet(ss[0].sets), last = L.bestSet(ss.at(-1).sets);
+    h += `<div class="card">
+      <div class="spread"><span class="eyebrow">Heaviest set per session</span><span class="small">${ss.length} session${ss.length === 1 ? '' : 's'}</span></div>
+      ${c ? `<div class="hrow" style="flex-wrap:wrap;gap:4px 10px"><span class="cond" style="font-size:28px">${first.reps} × ${fmtW(first.weight)} → <span class="${dirCls(c.dir)}">${last.reps} × ${fmtW(last.weight)}</span></span>
+        <span class="small ${dirCls(c.dir)}">${liftChangeText(c)} in the ${RANGE_TEXT[ui.range]}</span></div>` : ''}
+      ${timeChart(ss.map((s) => ({ date: s.date, v: L.bestSet(s.sets).weight })), { color: LIME, fmt: (v) => `${L.round(v)} kg`, label: `${ex.name} heaviest set, ${RANGE_TEXT[ui.range]}` })}
+    </div>`;
+  }
 
   const per = S.programs.slice().sort((a, b) => a.startDate.localeCompare(b.startDate))
     .map((p) => {
-      const sets = ss.filter((s) => s.programId === p.id).flatMap((s) => s.sets);
+      const sets = all.filter((s) => s.programId === p.id).flatMap((s) => s.sets);
       return sets.length ? { p, best: L.bestSet(sets) } : null;
     }).filter(Boolean);
   if (per.length > 1) {
@@ -766,31 +858,36 @@ function vExercise(params) {
       ${barChart(per.slice(-5).map((x) => ({ label: x.p.name, value: x.best.weight, text: fmtW(x.best.weight) })))}</div>`;
   }
 
-  const ya = yearAgo(ss, (s) => L.bestSet(s.sets));
-  const now = L.bestSet(ss.at(-1).sets);
+  const ya = yearAgo(all, (s) => L.bestSet(s.sets));
+  const now = L.bestSet(all.at(-1).sets);
   if (ya) {
     h += `<div class="card"><div class="eyebrow">A year ago → now</div>
       <div class="cond" style="font-size:30px">${ya.reps} × ${fmtW(ya.weight)} → <span class="lift">${now.reps} × ${fmtW(now.weight)}</span></div></div>`;
   }
 
-  h += `<div class="stack4"><div class="spread"><span class="eyebrow">Recent sessions</span><span class="small">tap to fix a mistake</span></div>${ss.slice(-10).reverse().map((s) => `
-    <button class="line-item" data-act="editSession" data-sid="${s.id}" data-ex="${ex.id}"><span class="small">${esc(L.fmtDate(s.date, { weekday: 'short' }))}</span><span>${esc(setsText(s.sets))}</span></button>`).join('')}</div>`;
+  const list = (ss.length ? ss : all.slice(-5)).slice().reverse();
+  h += `<div class="stack4"><div class="spread"><span class="eyebrow">${ss.length ? 'Sessions' : 'Last sessions'}</span><span class="small">tap to fix a mistake</span></div>${capList(list, (s) => `
+    <button class="line-item" data-act="editSession" data-sid="${s.id}" data-ex="${ex.id}"><span class="small">${esc(dateLong(s.date))}</span><span>${esc(setsText(s.sets))}</span></button>`)}</div>`;
   return h;
 }
 
 function vRunType(params) {
   const type = RUN_TYPES.includes(params.type) ? params.type : 'easy';
-  const rs = runsOf(type);
+  const all = runsOf(type);
   let h = `<div class="hrow">${backBtn()}</div><h1>${RUN[type]}s</h1>`;
-  if (!rs.length) return h + '<div class="empty">No runs of this type yet.</div>';
-  const recent = rs.slice(-16);
-  h += `<div class="card"><div class="spread"><span class="eyebrow">Pace /km</span><span class="small">higher = faster</span></div>
-      ${lineChart(recent.map(L.paceOf), BLUE, true, `${RUN[type]} pace over the last ${recent.length} runs`)}
-      <div class="spread small"><span>${L.fmtDuration(L.paceOf(recent[0]))}</span><span>${L.fmtDuration(L.paceOf(recent.at(-1)))}</span></div></div>
-    <div class="card"><div class="eyebrow">Distance (km)</div>
-      ${lineChart(recent.map((r) => r.distKm), BLUE, false, `${RUN[type]} distance over the last ${recent.length} runs`)}
-      <div class="spread small"><span>${L.fmtKm(recent[0].distKm)} km</span><span>${L.fmtKm(recent.at(-1).distKm)} km</span></div></div>
-    <div class="stack4"><div class="eyebrow">All ${RUN_SHORT[type].toLowerCase()} runs</div>${rs.slice().reverse().map(runLine).join('')}</div>`;
+  if (!all.length) return h + '<div class="empty">No runs of this type yet.</div>';
+  h += rangeSeg();
+  const rs = inRange(all);
+  if (!rs.length) {
+    return h + `<div class="empty">No ${RUN_SHORT[type].toLowerCase()} runs in the ${RANGE_TEXT[ui.range]}. Last one: ${esc(L.fmtDate(all.at(-1).date, { year: 'numeric' }))}.</div>`;
+  }
+  const c = runChange(rs);
+  h += `${c ? `<div class="sub">${rs.length} runs · <span class="${dirCls(c.dir)}">${runChangeText(type, c)}</span> in the ${RANGE_TEXT[ui.range]}</div>` : ''}
+    <div class="card"><div class="spread"><span class="eyebrow">Pace /km</span><span class="small">higher = faster</span></div>
+      ${timeChart(rs.map((r) => ({ date: r.date, v: L.paceOf(r) })), { color: BLUE, invert: true, fmt: L.fmtDuration, label: `${RUN[type]} pace, ${RANGE_TEXT[ui.range]}` })}</div>
+    <div class="card"><div class="eyebrow">Distance</div>
+      ${timeChart(rs.map((r) => ({ date: r.date, v: r.distKm })), { color: BLUE, fmt: (v) => `${L.fmtKm(v)} km`, label: `${RUN[type]} distance, ${RANGE_TEXT[ui.range]}` })}</div>
+    <div class="stack4"><div class="eyebrow">Runs · tap to edit</div>${capList(rs.slice().reverse(), runLine)}</div>`;
   return h;
 }
 
@@ -1326,6 +1423,15 @@ const A = {
     ui.archiveTab = d.v;
     if (route().name === 'archive') render();
     else go('archive');
+  },
+
+  showAll() {
+    ui.showAll = true;
+    render();
+  },
+  setRange(d) {
+    ui.range = d.v;
+    render();
   },
 
   backup: () => openSheet(sBackup),
