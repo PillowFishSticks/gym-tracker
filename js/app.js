@@ -238,7 +238,7 @@ function vToday() {
   }
 
   const key = ui.day || todayKey();
-  const d = p.days[key] || {};
+  const d = planDays(p)[key];
   const w = d.workout ? p.workouts[d.workout] : null;
   const finished = L.weekOf(p.startDate, today()) > p.weeks;
   const notToday = ui.day && ui.day !== todayKey();
@@ -358,7 +358,7 @@ function deleteSession(id) {
 function sPickDay() {
   const p = cur();
   return `<h2>Which day?</h2><div class="stack">${DAYS.map((k) => {
-    const d = p.days[k] || {};
+    const d = planDays(p)[k];
     const w = d.workout && p.workouts[d.workout];
     const label = [w && w.name, d.run && RUN[d.run]].filter(Boolean).join(' + ') || 'Rest';
     return `<button class="row ${k === todayKey() ? 'today' : ''}" data-act="setDay" data-day="${k}"><span class="name">${DAY_LONG[k]}</span><span class="small">${esc(label)}</span></button>`;
@@ -533,6 +533,26 @@ function sTarget() {
 
 // ---------- weekly program ----------
 
+// ---------- this week's swaps ----------
+// p.thisWeek = { mon: '<monday iso>', map: { thu: 'fri', fri: 'thu', ... } } — for the current week,
+// each weekday shows the plan of the day it maps to. A new week ignores it, so the plan is untouched.
+
+const weekMonday = () => L.addDays(today(), -((new Date().getDay() + 6) % 7));
+
+function weekMap(p) {
+  return p.thisWeek && p.thisWeek.mon === weekMonday() ? p.thisWeek.map : null;
+}
+
+function planDays(p) {
+  const map = weekMap(p);
+  return Object.fromEntries(DAYS.map((k) => [k, p.days[map ? map[k] : k] || {}]));
+}
+
+const weekChanged = (p) => {
+  const map = weekMap(p);
+  return !!map && DAYS.some((k) => map[k] !== k);
+};
+
 // This week's plan matched against what was actually logged. A planned workout or run
 // counts as done when it was logged on ANY day this week, so swapping days is no problem.
 function weekStatus(p) {
@@ -543,8 +563,9 @@ function weekStatus(p) {
   const runs = S.runs.filter(inWeek);
   const usedS = new Set(), usedR = new Set();
   const slots = [];
+  const days = planDays(p);
   DAYS.forEach((k, i) => {
-    const d = p.days[k] || {};
+    const d = days[k];
     const date = L.addDays(mon, i);
     if (d.workout && p.workouts[d.workout]) {
       const s = sessions.find((x) => x.workoutId === d.workout && !usedS.has(x.id));
@@ -583,15 +604,18 @@ function vThisWeek(p) {
   return `
     <div class="sub">${esc(L.fmtDate(ws.mon))} – ${esc(L.fmtDate(ws.sun))} · <span class="${done === ws.slots.length && done ? 'lift' : ''}">${done} of ${ws.slots.length} done</span></div>
     ${left.length ? `<div class="small" style="margin-top:-10px">Left: ${left.map((s) => esc(s.name)).join(', ')}</div>` : ''}
-    <div class="stack">${DAYS.map((k, i) => {
+    ${weekChanged(p) ? `<div class="hrow small" style="margin-top:-10px;gap:6px">Changed for this week <button class="linkbtn" data-act="resetWeek" style="padding:6px 0">Reset to plan</button></div>` : ''}
+    <div class="stack" data-sortable="thisweek" data-mode="swap">${DAYS.map((k, i) => {
       const date = L.addDays(ws.mon, i);
+      const past = date < today();
       const tags = ws.slots.filter((s) => s.day === k).map(slotTag).join('')
         + ws.extras.filter((x) => x.date === date).map((x) => `<span class="tag ${x.kind === 'run' ? 'run' : 'lift'}">${svg('<path d="M5 12.5l4.5 4.5L19 7.5"/>', 14, 3)} ${esc(x.name)} <span style="font-weight:500;opacity:.8">(extra)</span></span>`).join('');
-      return `<button class="row ${k === todayKey() ? 'today' : ''} ${tags ? '' : 'dashed'}" data-act="doDay" data-day="${k}" style="justify-content:flex-start">
+      return `<button class="row ${k === todayKey() ? 'today' : ''} ${tags ? '' : 'dashed'}" data-idx="${i}" ${past ? 'data-locked' : ''} data-act="doDay" data-day="${k}" style="justify-content:flex-start">
         <span class="stack4" style="gap:0;width:40px;flex-shrink:0"><span class="dayname">${k.toUpperCase()}</span><span class="small">${L.parseDate(date).getDate()}</span></span>
-        ${tags ? `<span class="tags">${tags}</span>` : '<span class="small grow">Rest</span>'}</button>`;
+        ${tags ? `<span class="tags">${tags}</span>` : '<span class="small grow">Rest</span>'}
+        ${past ? '' : `<span class="handle" data-handle aria-label="Drag onto another day to swap them this week">${I.grip}</span>`}</button>`;
     }).join('')}</div>
-    <div class="small">Do any workout on any day — it ticks off that workout's slot this week. Tap a day to do it now. Your plan doesn't change.</div>`;
+    <div class="small">Drag ⠿ onto another day to swap them for this week only (today onwards). Any workout done on any day still ticks off its slot. Tap a day to do it now.</div>`;
 }
 
 function vWeek() {
@@ -1641,6 +1665,12 @@ const A = {
     toast('Run deleted');
     render();
   },
+  resetWeek() {
+    delete cur().thisWeek;
+    save();
+    toast('Back to your plan for this week');
+    render();
+  },
   weekTab(d) {
     ui.weekTab = d.v;
     render();
@@ -1872,6 +1902,17 @@ const SORT = {
     const items = cur().workouts[list.dataset.wid].items;
     items.splice(to, 0, items.splice(from, 1)[0]);
   },
+  // This week only: swap what two days show, without touching the plan.
+  thisweek(list, from, to) {
+    const p = cur();
+    const mon = weekMonday();
+    if (L.addDays(mon, from) < today() || L.addDays(mon, to) < today()) return toast('Past days can’t be moved');
+    if (!weekMap(p)) p.thisWeek = { mon, map: Object.fromEntries(DAYS.map((k) => [k, k])) };
+    const m = p.thisWeek.map;
+    const a = DAYS[from], b = DAYS[to];
+    [m[a], m[b]] = [m[b], m[a]];
+    toast(`${DAY_LONG[a]} and ${DAY_LONG[b]} swapped for this week`);
+  },
   days(list, from, to) {
     const p = cur();
     const a = DAYS[from], b = DAYS[to];
@@ -1904,7 +1945,7 @@ document.addEventListener('pointermove', (e) => {
   rects.forEach((r, i) => {
     const mid = r.top + r.height / 2;
     if (swap) {
-      if (i !== from && centre > r.top && centre < r.bottom) to = i;
+      if (i !== from && !items[i].hasAttribute('data-locked') && centre > r.top && centre < r.bottom) to = i;
     } else if ((i < from && centre < mid) || (i > from && centre > mid)) {
       to = i < from ? Math.min(to, i) : Math.max(to, i);
     }
