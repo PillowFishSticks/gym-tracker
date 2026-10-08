@@ -60,6 +60,7 @@ async function pushNow() {
   const sentAt = S.savedAt;
   try {
     const r = await Sync.pushRemote(sess.code, S, sentAt);
+    if (!r.ok && r.error === 'code') return codeChanged();
     if (!r.ok) throw new Error(r.error);
     if (S.savedAt === sentAt) Sync.setDirty(false);
     setSync('ok');
@@ -77,6 +78,7 @@ async function pullRemote() {
   if (Sync.isDirty()) return pushNow();
   try {
     const r = await Sync.loadRemote(sess.code);
+    if (!r.ok && r.error === 'code') return codeChanged();
     if (!r.ok) return;
     if (r.url && r.url !== sess.url) Sync.setSession({ ...sess, url: r.url });
     if (r.state && (r.savedAt || 0) > (S.savedAt || 0) && !Sync.isDirty()) {
@@ -86,6 +88,16 @@ async function pullRemote() {
     }
     setSync('ok');
   } catch (e) { /* offline: keep the phone's copy */ }
+}
+
+// The saved code no longer works (it was changed): sign in again. Unsaved changes on this
+// phone are kept and sent up after signing in, because the sheet is the same one.
+function codeChanged() {
+  Sync.setSession(null);
+  ui.sheet = null;
+  ui.loginMsg = 'Your code has changed. Sign in with your new code.';
+  location.hash = '#/today';
+  render(true);
 }
 
 function setSync(state) {
@@ -307,7 +319,7 @@ function vLogin() {
       <div class="sub">Enter your code. You’ll stay signed in on this phone.</div></div>
     <form class="stack" data-submit="login" autocomplete="off" style="gap:12px">
       <input class="input num" name="code" type="password" inputmode="numeric" pattern="[0-9]*" required aria-label="Your code" style="height:68px;font-size:34px;letter-spacing:.25em">
-      <div class="small missc" id="loginerr" hidden></div>
+      <div class="small missc" id="loginerr" ${ui.loginMsg ? '' : 'hidden'}>${esc(ui.loginMsg || '')}</div>
       <button class="btn btn-primary" type="submit">Sign in</button>
     </form>
     <div class="grow" style="flex-grow:2"></div>`;
@@ -2035,7 +2047,10 @@ const SUB = {
       if (!r.ok) throw new Error(r.error === 'code' ? 'That code isn’t right.' : 'Something went wrong. Try again.');
       Sync.setSession({ code, name: r.name, url: r.url });
       const local = !S.demo && (S.programs.length || S.sessions.length || S.runs.length);
-      if (r.state) {
+      ui.loginMsg = '';
+      if (local && S.owner === r.name && Sync.isDirty()) {
+        // Same person signing back in with changes the sheet hasn't got yet: keep them.
+      } else if (r.state) {
         S = { ...blank(), ...r.state };
         Sync.setDirty(false);
       } else if (local) {
@@ -2044,6 +2059,7 @@ const SUB = {
         S = blank();
         Sync.setDirty(false);
       }
+      S.owner = r.name;
       persist(S);
       ui.day = null;
       location.hash = '#/today';
