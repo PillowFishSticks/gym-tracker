@@ -533,24 +533,37 @@ function sTarget() {
 
 // ---------- weekly program ----------
 
-// ---------- this week's swaps ----------
-// p.thisWeek = { mon: '<monday iso>', map: { thu: 'fri', fri: 'thu', ... } } — for the current week,
-// each weekday shows the plan of the day it maps to. A new week ignores it, so the plan is untouched.
+// ---------- this week's changes ----------
+// p.thisWeek = { mon: '<monday iso>', days: { mon: { workout, run }, ... } } holds this week's own
+// copy of the days once you swap or change one. A new week ignores it, so the plan is untouched.
 
 const weekMonday = () => L.addDays(today(), -((new Date().getDay() + 6) % 7));
 
-function weekMap(p) {
-  return p.thisWeek && p.thisWeek.mon === weekMonday() ? p.thisWeek.map : null;
+function weekDays(p) {
+  const t = p.thisWeek;
+  if (!t || t.mon !== weekMonday()) return null;
+  if (t.map && !t.days) { // older format: a day-to-day mapping
+    t.days = Object.fromEntries(DAYS.map((k) => [k, { ...(p.days[t.map[k]] || {}) }]));
+    delete t.map;
+  }
+  return t.days;
+}
+
+// This week's days, creating the copy on first change.
+function ensureWeek(p) {
+  if (!weekDays(p)) p.thisWeek = { mon: weekMonday(), days: Object.fromEntries(DAYS.map((k) => [k, { ...(p.days[k] || {}) }])) };
+  return p.thisWeek.days;
 }
 
 function planDays(p) {
-  const map = weekMap(p);
-  return Object.fromEntries(DAYS.map((k) => [k, p.days[map ? map[k] : k] || {}]));
+  const o = weekDays(p);
+  return Object.fromEntries(DAYS.map((k) => [k, (o ? o[k] : p.days[k]) || {}]));
 }
 
 const weekChanged = (p) => {
-  const map = weekMap(p);
-  return !!map && DAYS.some((k) => map[k] !== k);
+  const o = weekDays(p);
+  const same = (a = {}, b = {}) => (a.workout || null) === (b.workout || null) && (a.run || null) === (b.run || null);
+  return !!o && DAYS.some((k) => !same(o[k], p.days[k]));
 };
 
 // This week's plan matched against what was actually logged. A planned workout or run
@@ -610,12 +623,40 @@ function vThisWeek(p) {
       const past = date < today();
       const tags = ws.slots.filter((s) => s.day === k).map(slotTag).join('')
         + ws.extras.filter((x) => x.date === date).map((x) => `<span class="tag ${x.kind === 'run' ? 'run' : 'lift'}">${svg('<path d="M5 12.5l4.5 4.5L19 7.5"/>', 14, 3)} ${esc(x.name)} <span style="font-weight:500;opacity:.8">(extra)</span></span>`).join('');
-      return `<button class="row ${k === todayKey() ? 'today' : ''} ${tags ? '' : 'dashed'}" data-idx="${i}" ${past ? 'data-locked' : ''} data-act="doDay" data-day="${k}" style="justify-content:flex-start">
+      return `<button class="row ${k === todayKey() ? 'today' : ''} ${tags ? '' : 'dashed'}" data-idx="${i}" ${past ? 'data-locked' : ''} data-act="weekDay" data-day="${k}" style="justify-content:flex-start">
         <span class="stack4" style="gap:0;width:40px;flex-shrink:0"><span class="dayname">${k.toUpperCase()}</span><span class="small">${L.parseDate(date).getDate()}</span></span>
         ${tags ? `<span class="tags">${tags}</span>` : '<span class="small grow">Rest</span>'}
         ${past ? '' : `<span class="handle" data-handle aria-label="Drag onto another day to swap them this week">${I.grip}</span>`}</button>`;
     }).join('')}</div>
-    <div class="small">Drag ⠿ onto another day to swap them for this week only (today onwards). Any workout done on any day still ticks off its slot. Tap a day to do it now.</div>`;
+    <div class="small">Tap a coming day to change it, or drag ⠿ onto another day to swap — this week only, your plan stays the same. Any workout done on any day still ticks off its slot.</div>`;
+}
+
+// Change one coming day for this week only.
+function sWeekDay() {
+  const p = cur();
+  const k = ui.wkDay;
+  const d = planDays(p)[k];
+  const date = L.addDays(weekMonday(), DAYS.indexOf(k));
+  const opt = (id, name, meta) => {
+    const on = (d.workout || '') === id;
+    return `<button class="row" data-act="setWkWorkout" data-id="${id}" aria-pressed="${on}" style="${on ? `box-shadow: inset 0 0 0 2px ${LIME}` : ''}">
+      <span><span class="name">${esc(name)}</span>${meta ? `<span class="meta" style="display:block">${esc(meta)}</span>` : ''}</span>
+      ${on ? `<span class="lift">${svg('<path d="M5 12.5l4.5 4.5L19 7.5"/>', 22, 3)}</span>` : ''}</button>`;
+  };
+  return `
+    <div class="stack4"><h2>${DAY_LONG[k]} ${L.parseDate(date).getDate()}</h2><div class="sub">This week only. Your plan stays the same.</div></div>
+    <div class="stack"><div class="eyebrow">Workout</div>
+      ${opt('', 'No workout')}
+      ${Object.values(p.workouts).map((w) => opt(w.id, w.name, `${w.items.length} exercise${w.items.length === 1 ? '' : 's'}`)).join('')}
+    </div>
+    <div class="stack"><div class="eyebrow">Run</div>
+      <div class="seg run">${[['', 'None'], ...RUN_TYPES.map((t) => [t, RUN_SHORT[t]])]
+        .map(([v, l]) => `<button data-act="setWkRun" data-v="${v}" aria-pressed="${(d.run || '') === v}">${l}</button>`).join('')}</div>
+    </div>
+    <div class="grid2">
+      <button class="btn btn-ghost" data-act="doDay" data-day="${k}" ${d.workout || d.run ? '' : 'disabled'}>Do it now</button>
+      <button class="btn btn-primary" data-act="closeSheet" style="height:52px;font-size:22px">Done</button>
+    </div>`;
 }
 
 function vWeek() {
@@ -1665,6 +1706,25 @@ const A = {
     toast('Run deleted');
     render();
   },
+  // This-week rows: coming days open the change panel; today and past days open on Today.
+  weekDay(d) {
+    const date = L.addDays(weekMonday(), DAYS.indexOf(d.day));
+    if (date <= today()) return A.doDay(d);
+    ui.wkDay = d.day;
+    openSheet(sWeekDay);
+  },
+  setWkWorkout(d) {
+    const days = ensureWeek(cur());
+    days[ui.wkDay] = { ...days[ui.wkDay], workout: d.id || null };
+    save();
+    render();
+  },
+  setWkRun(d) {
+    const days = ensureWeek(cur());
+    days[ui.wkDay] = { ...days[ui.wkDay], run: d.v || null };
+    save();
+    render();
+  },
   resetWeek() {
     delete cur().thisWeek;
     save();
@@ -1907,10 +1967,9 @@ const SORT = {
     const p = cur();
     const mon = weekMonday();
     if (L.addDays(mon, from) < today() || L.addDays(mon, to) < today()) return toast('Past days can’t be moved');
-    if (!weekMap(p)) p.thisWeek = { mon, map: Object.fromEntries(DAYS.map((k) => [k, k])) };
-    const m = p.thisWeek.map;
+    const days = ensureWeek(p);
     const a = DAYS[from], b = DAYS[to];
-    [m[a], m[b]] = [m[b], m[a]];
+    [days[a], days[b]] = [days[b], days[a]];
     toast(`${DAY_LONG[a]} and ${DAY_LONG[b]} swapped for this week`);
   },
   days(list, from, to) {
