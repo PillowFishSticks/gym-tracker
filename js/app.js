@@ -2383,7 +2383,16 @@ if ('serviceWorker' in navigator) {
   if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
     navigator.serviceWorker.getRegistrations().then((rs) => rs.forEach((r) => r.unregister()));
   } else {
-    navigator.serviceWorker.register('./sw.js').catch(() => {});
+    // When a new version takes over, reload once so the new screens show straight away
+    // (otherwise the phone keeps showing its saved copy until the app is reopened).
+    const hadController = !!navigator.serviceWorker.controller;
+    let reloaded = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!hadController || reloaded) return;
+      reloaded = true;
+      location.reload();
+    });
+    navigator.serviceWorker.register('./sw.js').then((reg) => reg.update()).catch(() => {});
   }
 }
 if (S.active) wake(true);
