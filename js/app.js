@@ -2,7 +2,7 @@ import { load, save as persist, uid, blank } from './store.js';
 import * as L from './logic.js';
 
 let S = load();
-const ui = { day: null, sheet: null, runForm: null, np: null, archiveTab: 'exercises', archiveQ: '', range: '3m' };
+const ui = { day: null, sheet: null, runForm: null, np: null, archiveTab: 'exercises', archiveQ: '', range: '1m' };
 const $app = document.getElementById('app');
 const $sheet = document.getElementById('sheet');
 
@@ -673,8 +673,8 @@ function sRun() {
 
 // ---------- progress ----------
 
-const RANGES = [['2w', '2W', 14], ['1m', '1M', 30], ['3m', '3M', 91], ['1y', '1Y', 365], ['all', 'All', 0]];
-const RANGE_TEXT = { '2w': 'last 2 weeks', '1m': 'last month', '3m': 'last 3 months', '1y': 'last year', all: 'all time' };
+const RANGES = [['1m', '1M', 30], ['3m', '3M', 91], ['6m', '6M', 182], ['1y', '1Y', 365], ['all', 'All', 0]];
+const RANGE_TEXT = { '1m': 'last month', '3m': 'last 3 months', '6m': 'last 6 months', '1y': 'last year', all: 'all time' };
 
 function rangeStart() {
   const r = RANGES.find((x) => x[0] === ui.range);
@@ -755,7 +755,7 @@ function timeChart(points, { color, invert, fmt, label }) {
   </svg>`;
 }
 
-const dateLong = (d) => L.fmtDate(d, { weekday: 'short', ...(ui.range === '1y' || ui.range === 'all' ? { year: 'numeric' } : {}) });
+const dateLong = (d) => L.fmtDate(d, { weekday: 'short', ...(ui.range === '6m' || ui.range === '1y' || ui.range === 'all' ? { year: 'numeric' } : {}) });
 
 // Long lists show the latest 20 until "Show all" is tapped (reset on every screen change).
 function capList(items, row) {
