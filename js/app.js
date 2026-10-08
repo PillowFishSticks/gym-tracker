@@ -696,7 +696,7 @@ function liftChange(ss) {
   if (b.weight > a.weight && eb > ea * 0.92) dir = 'up';
   return { dir, a, b, ea, eb };
 }
-// Both parts of the change, e.g. "+2.5 kg · −5 reps".
+// Both parts of the change side by side, e.g. "+2.5 kg   −5 reps".
 function liftChangeText(c) {
   if (!c) return '';
   const parts = [];
@@ -704,7 +704,7 @@ function liftChangeText(c) {
   if (d) parts.push(`${d > 0 ? '+' : '−'}${Math.abs(d)} kg`);
   const r = c.b.reps - c.a.reps;
   if (r) parts.push(`${r > 0 ? '+' : '−'}${Math.abs(r)} rep${Math.abs(r) === 1 ? '' : 's'}`);
-  return parts.join(' · ') || 'no change';
+  return parts.length ? `<span class="chg">${parts.map((p) => `<span>${p}</span>`).join('')}</span>` : 'no change';
 }
 
 // Every run type is judged on pace (faster = better); within 2 s/km counts as the same.
