@@ -1056,40 +1056,61 @@ function vArchive() {
     const all = S.programs.slice().sort((a, b) => b.startDate.localeCompare(a.startDate));
     return h + (all.length ? `<div class="stack4">${all.map(programLine).join('')}</div>` : '<div class="empty">No programs yet.</div>');
   }
+  // Same layout as Progress: collapsible Lifts (with search) and Runs, comparing a year ago with now.
+  const lifts = archLifts();
+  const runs = archRuns();
+  const liftBody = lifts.length ? `
+    <label class="hrow input" style="gap:10px;margin:12px 0 4px;background:var(--bg)"><span class="muted">${I.search}</span>
+      <input type="search" data-input="archq" value="${esc(ui.archiveQ)}" placeholder="Search lifts" aria-label="Search lifts" style="flex-grow:1;border:none;background:transparent;font-size:17px;outline:none"></label>
+    <div id="archlist">${archListHtml(lifts)}</div>` : '<div class="empty">Nothing logged yet.</div>';
+  const runBody = runs.length ? archHead('Run') + runs.map((r) => r.html).join('') : '<div class="empty">Logged runs show up here.</div>';
   return h + `
-    <label class="hrow input" style="gap:10px;background:var(--card)"><span class="muted">${I.search}</span>
-      <input type="search" data-input="archq" value="${esc(ui.archiveQ)}" placeholder="Search any exercise or run" aria-label="Search exercises" style="flex-grow:1;border:none;background:transparent;font-size:17px;outline:none"></label>
-    <div id="archlist">${archListHtml()}</div>`;
+    <div class="small" style="margin-top:-8px">Your best a year ago compared with now.</div>
+    ${accordion('archLifts', 'Lifts', lifts.length, lifts.length === 1 ? 'lift' : 'lifts', lifts.map((x) => x.dir), liftBody)}
+    ${accordion('archRuns', 'Runs', runs.length, runs.length === 1 ? 'run type' : 'run types', runs.map((x) => x.dir), runBody)}`;
 }
 
-function archListHtml() {
-  const q = ui.archiveQ.trim().toLowerCase();
-  const rows = [];
-  const exs = Object.values(S.exercises)
-    .filter((e) => e.name.toLowerCase().includes(q))
-    .sort((a, b) => a.name.localeCompare(b.name));
-  for (const e of exs) {
-    const ss = exSessions(e.id);
-    if (!ss.length) continue;
-    const ya = yearAgo(ss, (s) => L.bestSet(s.sets).weight);
-    const now = L.bestSet(ss.at(-1).sets).weight;
-    rows.push(`<button class="line-item" data-act="go" data-to="exercise" data-id="${e.id}" style="display:grid;grid-template-columns:1fr 84px 84px;gap:8px">
-      <span style="font-size:16px;font-weight:500">${esc(e.name)}</span><span class="small">${ya == null ? '—' : fmtW(ya) + (ya ? ' kg' : '')}</span>
-      <span style="font-weight:600;color:${ya != null && now > ya ? LIME : 'var(--text2)'}">${fmtW(now)}${now ? ' kg' : ''}</span></button>`);
-  }
-  for (const t of RUN_TYPES) {
-    const label = `${RUN_SHORT[t]} pace`;
-    if (q && !`${label} ${RUN[t]}`.toLowerCase().includes(q)) continue;
+const ARCH_GRID = 'display:grid;grid-template-columns:1fr 84px 84px;gap:8px';
+const archHead = (first) => `<div style="${ARCH_GRID};padding:12px 2px 6px" class="eyebrow"><span>${first}</span><span>Year ago</span><span>Now</span></div>`;
+
+// Every exercise ever logged: year-ago best weight vs latest.
+function archLifts() {
+  return Object.values(S.exercises)
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((e) => {
+      const ss = exSessions(e.id);
+      if (!ss.length) return null;
+      const ya = yearAgo(ss, (s) => L.bestSet(s.sets).weight);
+      const now = L.bestSet(ss.at(-1).sets).weight;
+      const dir = ya == null ? null : now > ya ? 'up' : now < ya ? 'down' : 'same';
+      const color = dir === 'up' ? LIME : dir === 'down' ? ORANGE : 'var(--text2)';
+      return { name: e.name, dir, html: `<button class="line-item" data-act="go" data-to="exercise" data-id="${e.id}" style="${ARCH_GRID}">
+        <span style="font-size:16px;font-weight:500">${esc(e.name)}</span><span class="small">${ya == null ? '—' : fmtW(ya) + (ya ? ' kg' : '')}</span>
+        <span style="font-weight:600;color:${color}">${fmtW(now)}${now ? ' kg' : ''}</span></button>` };
+    })
+    .filter(Boolean);
+}
+
+// Each run type: year-ago pace vs latest (faster = better).
+function archRuns() {
+  return RUN_TYPES.map((t) => {
     const rs = runsOf(t);
-    if (!rs.length) continue;
+    if (!rs.length) return null;
     const val = (r) => `${L.fmtDuration(L.paceOf(r))}/km`;
-    const ya = yearAgo(rs, val);
-    rows.push(`<button class="line-item" data-act="go" data-to="runtype" data-type="${t}" style="display:grid;grid-template-columns:1fr 84px 84px;gap:8px">
-      <span style="font-size:16px;font-weight:500;color:${BLUE}">${label}</span>
-      <span class="small">${ya || '—'}</span><span style="font-weight:600;color:${BLUE}">${val(rs.at(-1))}</span></button>`);
-  }
-  if (!rows.length) return `<div class="empty">${q ? 'Nothing matches that.' : 'Nothing logged yet.'}</div>`;
-  return `<div style="display:grid;grid-template-columns:1fr 84px 84px;gap:8px;padding:0 2px 6px" class="eyebrow"><span>Exercise</span><span>Year ago</span><span>Now</span></div>${rows.join('')}`;
+    const old = yearAgo(rs, (r) => r);
+    const dir = old ? runDir(rs.at(-1), old) : null;
+    const color = dir === 'up' ? LIME : dir === 'down' ? ORANGE : BLUE;
+    return { dir, html: `<button class="line-item" data-act="go" data-to="runtype" data-type="${t}" style="${ARCH_GRID}">
+      <span style="font-size:16px;font-weight:500;color:${BLUE}">${RUN_SHORT[t]} pace</span>
+      <span class="small">${old ? val(old) : '—'}</span><span style="font-weight:600;color:${color}">${val(rs.at(-1))}</span></button>` };
+  }).filter(Boolean);
+}
+
+function archListHtml(lifts = archLifts()) {
+  const q = ui.archiveQ.trim().toLowerCase();
+  const rows = lifts.filter((x) => x.name.toLowerCase().includes(q));
+  if (!rows.length) return '<div class="small" style="padding:12px 2px">No lifts match that.</div>';
+  return archHead('Exercise') + rows.map((x) => x.html).join('');
 }
 
 function vProgramDetail(params) {
