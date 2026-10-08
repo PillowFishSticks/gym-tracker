@@ -206,6 +206,21 @@ select.input { appearance: none; -webkit-appearance: none; }
 .actions { display: grid; grid-template-columns: 1fr 2fr; gap: 12px; }
 .actions button { height: 86px; border-radius: 20px; font-family: var(--cond); font-size: 30px; font-weight: 700; text-transform: uppercase; }
 .btn-done { border: none; background: var(--lift); color: var(--bg); display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 36px !important; }
+/* Short phones (e.g. iPhone SE): smaller set card so Done stays on screen */
+@media (max-height: 720px) {
+  .setcard { min-height: 180px; padding: 14px; }
+  .setnum .n { font-size: 84px; }
+}
+
+/* "Same as last week / last set" quick-log buttons above Different/Done */
+.quick { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.quick button {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  min-height: 60px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 16px; background: var(--card); color: var(--text2);
+  font-size: 13px; font-weight: 600;
+}
+.quick button b { font-family: var(--cond); font-size: 22px; font-weight: 700; color: var(--text); }
+.quick button:disabled { opacity: .4; }
 .btn-miss { border: 2px solid var(--line); background: transparent; color: var(--text); font-size: 26px !important; }
 
 /* minmax(0, …) lets the columns shrink below the inputs' natural width on narrow phones */

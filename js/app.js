@@ -504,6 +504,15 @@ function vTrain() {
       <div class="setlabels"><span>reps</span><span>${t.weight ? 'kg' : 'bodyweight'}</span></div>
       ${logs.length ? `<button class="linkbtn" data-act="editActive" data-k="${it.k}" style="margin-top:8px;color:var(--muted);font-weight:500">Done: ${esc(setsText(logs))} · <span class="lift">&nbsp;Edit</span></button>` : ''}
     </div>
+    ${(() => {
+      const wk = lastWeekSet(it, logs.length);
+      const ls = logs.at(-1);
+      const lbl = (s) => `${s.reps} × ${fmtW(s.weight)}`;
+      return `<div class="quick">
+        <button data-act="sameWeek" ${wk ? '' : 'disabled'}><span>Same as last week</span><b>${wk ? lbl(wk) : '—'}</b></button>
+        <button data-act="sameSet" ${ls ? '' : 'disabled'}><span>Same as last set</span><b>${ls ? lbl(ls) : '—'}</b></button>
+      </div>`;
+    })()}
     <div class="actions">
       <button class="btn-miss" data-act="missed">Different</button>
       <button class="btn-done" data-act="done">${I.check}Done</button>
@@ -555,6 +564,22 @@ function sEditSets() {
 function openSetEditor(title, sub, sets, step, onSave) {
   ui.es = { title, sub, sets: sets.map((s) => ({ ...s })), step, save: onSave };
   openSheet(sEditSets);
+}
+
+// What was done on set `i` the last time this exercise was done (its last set if it had fewer).
+function lastWeekSet(it, i) {
+  const prev = exSessions(it.exId).at(-1);
+  if (!prev || !prev.sets.length) return null;
+  return prev.sets[Math.min(i, prev.sets.length - 1)];
+}
+
+// Log a set with given reps/weight, judged against this set's target.
+function logAs(s) {
+  const a = S.active;
+  const it = a.items[a.ex];
+  const t = targetFor(it.exId, it);
+  const tr = setReps(t, (a.logs[it.k] || []).length);
+  logSet({ reps: s.reps, weight: s.weight, hit: s.reps >= tr && s.weight >= t.weight });
 }
 
 // ---------- supersets ----------
@@ -1611,6 +1636,17 @@ const A = {
     const t = targetFor(it.exId, it);
     logSet({ reps: setReps(t, (S.active.logs[it.k] || []).length), weight: t.weight, hit: true });
   },
+  sameWeek() {
+    const a = S.active;
+    const it = a.items[a.ex];
+    const s = lastWeekSet(it, (a.logs[it.k] || []).length);
+    if (s) logAs(s);
+  },
+  sameSet() {
+    const a = S.active;
+    const s = (a.logs[a.items[a.ex].k] || []).at(-1);
+    if (s) logAs(s);
+  },
   missed() {
     const it = S.active.items[S.active.ex];
     const full = targetFor(it.exId, it);
@@ -2357,3 +2393,9 @@ pullRemote();
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') pullRemote();
 });
+// While the app stays open, pick up changes made elsewhere (other phone, sheet edits) so this
+// phone's older copy doesn't overwrite them on its next save.
+setInterval(() => {
+  const typing = document.activeElement && document.activeElement.matches('input, select, textarea');
+  if (document.visibilityState === 'visible' && !Sync.isDirty() && !ui.sheet && !typing) pullRemote();
+}, 30000);
