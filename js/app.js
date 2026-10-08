@@ -120,13 +120,6 @@ function setsText(sets) {
   return sets.map((s) => `${s.reps}×${fmtW(s.weight)}`).join(', ');
 }
 
-function cmpSets(a, b) {
-  if (!a || !b) return 'same';
-  if (a.weight !== b.weight) return a.weight > b.weight ? 'up' : 'down';
-  if (a.reps !== b.reps) return a.reps > b.reps ? 'up' : 'down';
-  return 'same';
-}
-
 function weekLabel(p) {
   const w = L.weekOf(p.startDate, today());
   if (w < 1) return `Starts ${L.fmtDate(p.startDate)}`;
@@ -695,19 +688,27 @@ const rangeSeg = () => `<div class="seg" role="group" aria-label="Time period">$
 const dirCls = (dir) => (dir === 'up' ? 'lift' : dir === 'down' ? 'missc' : '');
 
 // First vs last session inside the period (list is oldest first).
+// The arrow is decided by estimated one-rep max, so weight and reps both count
+// (e.g. 6 × 50 → 14 × 47.5 is up). Under 1% either way counts as no change.
+// A weight increase still counts as up after the usual rep reset (15 × 40 → 10 × 42.5),
+// unless the estimate fell by more than 8%.
 function liftChange(ss) {
   if (ss.length < 2) return null;
   const a = L.bestSet(ss[0].sets), b = L.bestSet(ss.at(-1).sets);
-  return { dir: cmpSets(b, a), a, b };
+  const ea = L.e1rm(ss[0].sets), eb = L.e1rm(ss.at(-1).sets);
+  let dir = Math.abs(eb - ea) < ea * 0.01 ? 'same' : eb > ea ? 'up' : 'down';
+  if (b.weight > a.weight && eb > ea * 0.92) dir = 'up';
+  return { dir, a, b, ea, eb };
 }
+// Both parts of the change, e.g. "+2.5 kg · −5 reps".
 function liftChangeText(c) {
   if (!c) return '';
-  if (c.b.weight !== c.a.weight) {
-    const d = L.round(c.b.weight - c.a.weight);
-    return `${d > 0 ? '+' : '−'}${Math.abs(d)} kg`;
-  }
+  const parts = [];
+  const d = L.round(c.b.weight - c.a.weight);
+  if (d) parts.push(`${d > 0 ? '+' : '−'}${Math.abs(d)} kg`);
   const r = c.b.reps - c.a.reps;
-  return r ? `${r > 0 ? '+' : '−'}${Math.abs(r)} rep${Math.abs(r) === 1 ? '' : 's'}` : 'no change';
+  if (r) parts.push(`${r > 0 ? '+' : '−'}${Math.abs(r)} rep${Math.abs(r) === 1 ? '' : 's'}`);
+  return parts.join(' · ') || 'no change';
 }
 
 // Long runs are judged on distance, the others on pace.
@@ -870,10 +871,16 @@ function vExercise(params) {
     const c = liftChange(ss);
     const first = L.bestSet(ss[0].sets), last = L.bestSet(ss.at(-1).sets);
     h += `<div class="card">
-      <div class="spread"><span class="eyebrow">Heaviest set per session</span><span class="small">${ss.length} session${ss.length === 1 ? '' : 's'}</span></div>
+      <div class="spread"><span class="eyebrow">Best set per session</span><span class="small">${ss.length} session${ss.length === 1 ? '' : 's'}</span></div>
       ${c ? `<div class="hrow" style="flex-wrap:wrap;gap:4px 10px"><span class="cond" style="font-size:28px">${first.reps} × ${fmtW(first.weight)} → <span class="${dirCls(c.dir)}">${last.reps} × ${fmtW(last.weight)}</span></span>
-        <span class="small ${dirCls(c.dir)}">${liftChangeText(c)} in the ${RANGE_TEXT[ui.range]}</span></div>` : ''}
-      ${timeChart(ss.map((s) => ({ date: s.date, v: L.bestSet(s.sets).weight })), { color: LIME, fmt: (v) => `${L.round(v)} kg`, label: `${ex.name} heaviest set, ${RANGE_TEXT[ui.range]}` })}
+        <span class="small ${dirCls(c.dir)}">${liftChangeText(c)} in the ${RANGE_TEXT[ui.range]}</span></div>
+        ${last.weight ? `<div class="small">Est. 1-rep max ${Math.round(c.ea)} → <span class="${dirCls(c.dir)}">${Math.round(c.eb)} kg</span> · combines weight and reps</div>` : ''}` : ''}
+      ${last.weight ? `<div class="seg" role="group" aria-label="Graph shows" style="padding:4px">
+        <button data-act="chartMode" data-v="weight" aria-pressed="${ui.chart !== 'e1rm'}" style="height:38px;font-size:14px">Weight</button>
+        <button data-act="chartMode" data-v="e1rm" aria-pressed="${ui.chart === 'e1rm'}" style="height:38px;font-size:14px">Est. 1-rep max</button></div>` : ''}
+      ${ui.chart === 'e1rm' && last.weight
+        ? timeChart(ss.map((s) => ({ date: s.date, v: L.e1rm(s.sets) })), { color: LIME, fmt: (v) => `${Math.round(v)} kg`, label: `${ex.name} estimated one-rep max, ${RANGE_TEXT[ui.range]}` })
+        : timeChart(ss.map((s) => ({ date: s.date, v: L.bestSet(s.sets).weight })), { color: LIME, fmt: (v) => `${L.round(v)} kg`, label: `${ex.name} heaviest set, ${RANGE_TEXT[ui.range]}` })}
     </div>`;
   }
 
@@ -1460,6 +1467,10 @@ const A = {
     else go('archive');
   },
 
+  chartMode(d) {
+    ui.chart = d.v;
+    render();
+  },
   toggleSec(d) {
     ui.open[d.k] = !ui.open[d.k];
     render();

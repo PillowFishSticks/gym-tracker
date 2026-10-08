@@ -109,6 +109,11 @@ export function nextTarget(cfg, step, t, done, missStreak = 0) {
   return out(t.weight, tr, 1, 'same', `Short ${short} rep${short > 1 ? 's' : ''} · same target`);
 }
 
+// Estimated one-rep max (Epley) of the session's strongest set; reps alone for bodyweight.
+export function e1rm(sets) {
+  return Math.max(...sets.map((s) => (s.weight ? s.weight * (1 + s.reps / 30) : s.reps)));
+}
+
 // Heaviest set, then most reps at that weight.
 export function bestSet(sets) {
   return sets.reduce((b, s) => (!b || s.weight > b.weight || (s.weight === b.weight && s.reps > b.reps) ? s : b), null);
