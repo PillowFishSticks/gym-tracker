@@ -239,7 +239,7 @@ function vToday() {
         ? 'Your last program is in the Archive. Start the next one when you’re ready.'
         : 'Set up your week once: which workout or run goes on which day. Then just open the app and tap Start.'}</p>
       <button class="btn btn-primary" data-act="go" data-to="newprogram">${had ? 'Start next program' : 'Set up my program'}</button>
-      ${had ? '<button class="btn btn-ghost" data-act="go" data-to="archive">Open Archive</button>' : ''}`;
+      ${had ? '<button class="btn btn-ghost" data-act="go" data-to="archive">Open Archive</button>' : '<button class="btn btn-ghost" data-act="loadDemo">Try it with demo data first</button>'}`;
   }
 
   const key = ui.day || todayKey();
@@ -1097,7 +1097,12 @@ function sBackup() {
     <div class="sub">Everything is stored only on this phone. Save a backup file now and then, e.g. to iCloud Drive or Google Drive. You can also use it to move your data to another phone.</div></div>
     <button class="btn btn-primary" data-act="exportData" style="height:60px;font-size:24px">Save backup file</button>
     <label class="btn btn-ghost">Restore from a backup file<input type="file" accept="application/json,.json" data-change="importFile" hidden></label>
-    <div class="small center">${S.lastBackup ? `Last backup: ${esc(L.fmtDate(S.lastBackup, { year: 'numeric' }))}` : 'No backup saved yet.'}</div>`;
+    <div class="small center">${S.lastBackup ? `Last backup: ${esc(L.fmtDate(S.lastBackup, { year: 'numeric' }))}` : 'No backup saved yet.'}</div>
+    <div class="stack" style="margin-top:8px">
+      <div class="eyebrow">Demo data</div>
+      ${S.demo ? '<button class="btn btn-danger btn-small" data-act="clearDemo">Clear demo data and start fresh</button>' : ''}
+      <button class="btn btn-ghost btn-small" data-act="loadDemo">Load demo data (replaces everything)</button>
+    </div>`;
 }
 
 async function exportData() {
@@ -1432,6 +1437,25 @@ const A = {
   setRange(d) {
     ui.range = d.v;
     render();
+  },
+
+  async loadDemo() {
+    const hasData = S.sessions.length || S.runs.length || S.programs.length;
+    if (hasData && !confirm('Replace everything in the app with demo data? Save a backup first if you want to keep what’s here.')) return;
+    const { buildDemo } = await import('./demo.js');
+    S = buildDemo();
+    ui.day = null;
+    save();
+    closeSheet();
+    toast('Demo data loaded');
+    go('today');
+  },
+  clearDemo() {
+    if (!confirm('Delete all demo data and start with an empty app?')) return;
+    S = blank();
+    save();
+    closeSheet();
+    go('today');
   },
 
   backup: () => openSheet(sBackup),
