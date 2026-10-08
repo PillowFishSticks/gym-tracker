@@ -184,15 +184,22 @@ select.input { appearance: none; -webkit-appearance: none; }
 .btn-done { border: none; background: var(--lift); color: var(--bg); display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 36px !important; }
 .btn-miss { border: 2px solid var(--line); background: transparent; color: var(--text); font-size: 26px !important; }
 
-.setedit { display: grid; grid-template-columns: 24px 1fr 1fr 44px; gap: 8px; align-items: center; }
-.mini { display: flex; align-items: center; justify-content: space-between; background: var(--bg); border-radius: 12px; padding: 4px; }
-.mini button { width: 40px; height: 44px; border: none; border-radius: 10px; background: #23262B; color: var(--text); font-size: 22px; }
-.mini input { flex: 1; min-width: 0; text-align: center; border: none; background: transparent; color: var(--text); padding: 0; font-family: var(--cond); font-size: 26px; font-weight: 700; }
+/* minmax(0, …) lets the columns shrink below the inputs' natural width on narrow phones */
+/* kg gets more room than reps ("52.5" vs "12") */
+.setedit { display: grid; grid-template-columns: 14px minmax(0, 0.85fr) minmax(0, 1.15fr) 36px; gap: 6px; align-items: center; }
+.setedit .iconbtn { width: 36px; }
+.mini { display: flex; align-items: center; justify-content: space-between; gap: 2px; min-width: 0; background: var(--bg); border-radius: 12px; padding: 3px; }
+.mini button { flex: 0 0 32px; width: 32px; height: 44px; border: none; border-radius: 10px; background: #23262B; color: var(--text); font-size: 22px; }
+.mini input { flex: 1 1 0; width: 0; min-width: 0; text-align: center; border: none; background: transparent; color: var(--text); padding: 0; font-family: var(--cond); font-size: 23px; font-weight: 700; }
+@media (max-width: 345px) {
+  .mini button { flex-basis: 28px; width: 28px; }
+  .mini input { font-size: 20px; }
+}
 
 .stepper { display: flex; align-items: center; justify-content: space-between; background: var(--bg); border-radius: 18px; padding: 8px; }
 .stepper button { width: 72px; height: 72px; border: none; border-radius: 14px; background: #23262B; color: var(--text); font-size: 36px; }
 .stepper .val {
-  flex: 1; min-width: 0; text-align: center; border: none; background: transparent; color: var(--text);
+  flex: 1 1 0; width: 0; min-width: 0; text-align: center; border: none; background: transparent; color: var(--text);
   font-family: var(--cond); font-size: 60px; font-weight: 700; line-height: 1; padding: 0;
 }
 .stepper .val.lift { color: var(--lift); }
@@ -213,7 +220,7 @@ select.input { appearance: none; -webkit-appearance: none; }
 /* ---------- sheet & toast ---------- */
 .backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, .65); z-index: 20; }
 .sheet {
-  position: fixed; left: 0; right: 0; bottom: 0; z-index: 21; max-height: 92dvh; overflow-y: auto;
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 21; max-height: 92dvh; overflow-y: auto; overflow-x: hidden;
   max-width: 520px; margin: 0 auto; background: var(--card); border-radius: 28px 28px 0 0;
   padding: 14px 20px calc(env(safe-area-inset-bottom) + 24px); display: flex; flex-direction: column; gap: 18px;
 }
