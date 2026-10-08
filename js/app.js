@@ -289,6 +289,7 @@ function vToday() {
         .join('')}</div>`;
       if (!S.active) h += `<button class="btn btn-primary" data-act="start" data-id="${w.id}">Start workout</button>`;
       if (!S.active && notToday) h += `<button class="btn btn-ghost" data-act="cancelDay">Cancel</button>`;
+      if (!S.active && !notToday) h += `<button class="linkbtn skipbtn" data-act="askSkip" data-kind="lift">Skip ${esc(w.name)} today</button>`;
     }
   }
 
@@ -300,6 +301,7 @@ function vToday() {
         <div class="spread" style="align-items:center"><span class="tag run">${RUN[d.run]}</span>
         ${last ? `<span class="small">Last: ${L.fmtKm(last.distKm)} km · ${L.fmtDuration(L.paceOf(last))}/km</span>` : ''}</div>
         <button class="btn btn-run" data-act="logRun" data-type="${d.run}">Log run</button>
+        ${notToday ? '' : `<button class="linkbtn skipbtn" data-act="askSkip" data-kind="run" style="margin:-4px 0 -8px">Skip ${RUN[d.run].toLowerCase()} today</button>`}
       </div>`;
   }
 
@@ -1705,6 +1707,23 @@ const A = {
     save();
     closeSheet();
     toast('Workout deleted');
+    render();
+  },
+  // Not doing today's planned workout/run: take it off today for this week only.
+  askSkip(d) {
+    const p = cur();
+    const day = planDays(p)[todayKey()];
+    const name = d.kind === 'run' ? `the ${RUN[day.run].toLowerCase()}` : p.workouts[day.workout].name;
+    ui.ask = { title: `Skip ${name} today?`, body: `It’s taken off ${DAY_LONG[todayKey()]} for this week only. Your plan stays the same, and Program → This week → Reset to plan brings it back.`, yes: 'Skip', act: 'skipToday', id: d.kind };
+    openSheet(sAsk);
+  },
+  skipToday(d) {
+    const days = ensureWeek(cur());
+    const k = todayKey();
+    days[k] = { ...days[k], [d.id === 'run' ? 'run' : 'workout']: null };
+    save();
+    closeSheet();
+    toast('Skipped for today');
     render();
   },
   askDelRun(d) {
