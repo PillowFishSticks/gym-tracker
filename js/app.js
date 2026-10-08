@@ -217,15 +217,6 @@ const stepper = (act, field, val, label, cls, obj) => `
 
 const backBtn = (to) => `<button class="iconbtn" data-act="${to ? 'go' : 'back'}" ${to ? `data-to="${to}"` : ''} aria-label="Back">${I.back}</button>`;
 
-// ---------- charts ----------
-
-function barChart(items) {
-  const max = Math.max(...items.map((i) => i.value)) || 1;
-  return `<div class="bars">${items
-    .map((it, i) => `<div><span class="v">${esc(it.text)}</span><div class="bar ${i === items.length - 1 ? 'last' : ''}" style="height:${Math.round(8 + (100 * it.value) / max)}px"></div></div>`)
-    .join('')}</div><div class="barlabels">${items.map((it) => `<span>${esc(it.label)}</span>`).join('')}</div>`;
-}
-
 // =====================================================================
 // Views
 // =====================================================================
@@ -1072,7 +1063,6 @@ function vExercise(params) {
   } else {
     const c = liftChange(ss);
     const first = L.bestSet(ss[0].sets), last = L.bestSet(ss.at(-1).sets);
-    const totalReps = (s) => s.sets.reduce((n, x) => n + x.reps, 0);
     h += `<div class="card">
       <div class="spread"><span class="eyebrow">Progression</span><span class="small">${ss.length} session${ss.length === 1 ? '' : 's'}</span></div>
       ${c ? `<div class="hrow" style="flex-wrap:wrap;gap:4px 10px"><span class="cond" style="font-size:28px">${first.reps} × ${fmtW(first.weight)} → <span class="${dirCls(c.dir)}">${last.reps} × ${fmtW(last.weight)}</span></span>
@@ -1081,21 +1071,7 @@ function vExercise(params) {
     ${last.weight ? `<div class="card">
       <div class="spread"><span class="eyebrow">Weight</span><span class="small">kg lifted each session</span></div>
       ${timeChart(ss.map((s) => ({ date: s.date, v: L.bestSet(s.sets).weight })), { color: LIME, fmt: (v) => `${L.round(v)} kg`, label: `${ex.name} weight per session, ${RANGE_TEXT[ui.range]}` })}
-    </div>` : ''}
-    <div class="card">
-      <div class="spread"><span class="eyebrow">Reps</span><span class="small">total across all sets</span></div>
-      ${timeChart(ss.map((s) => ({ date: s.date, v: totalReps(s) })), { color: LIME, fmt: (v) => `${Math.round(v)}`, label: `${ex.name} total reps per session, ${RANGE_TEXT[ui.range]}` })}
-    </div>`;
-  }
-
-  const per = S.programs.slice().sort((a, b) => a.startDate.localeCompare(b.startDate))
-    .map((p) => {
-      const sets = all.filter((s) => s.programId === p.id).flatMap((s) => s.sets);
-      return sets.length ? { p, best: L.bestSet(sets) } : null;
-    }).filter(Boolean);
-  if (per.length > 1) {
-    h += `<div class="card"><div class="eyebrow">Best set in each program</div>
-      ${barChart(per.slice(-5).map((x) => ({ label: x.p.name, value: x.best.weight, text: fmtW(x.best.weight) })))}</div>`;
+    </div>` : ''}`;
   }
 
   const ya = yearAgo(all, (s) => L.bestSet(s.sets));
