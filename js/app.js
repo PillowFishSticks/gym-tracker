@@ -444,7 +444,7 @@ function vSummary() {
     <div class="stack">${s.items
       .map((x) => {
         const t = S.targets[x.exId] || { reps: 0, weight: 0 };
-        const cls = x.why.startsWith('Top') ? 'lift' : x.dir === 'down' || x.why.startsWith('Missed') ? 'missc' : '';
+        const cls = dirCls(x.dir); // progress green, setbacks orange, holds grey
         return `<button class="row" data-act="editTarget" data-ex="${x.exId}">
           <div><div class="name">${esc(exName(x.exId))}</div><div class="meta ${cls}">${esc(x.why)}</div></div>
           <div class="hrow"><span class="big">${tReps(t)} × ${fmtW(t.weight)}</span>${arrow(x.dir)}</div></button>`;
