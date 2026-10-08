@@ -256,6 +256,13 @@ function vToday() {
   }
   if (S.active) h += `<button class="btn btn-primary" data-act="go" data-to="train">Resume workout</button>`;
 
+  const ws = weekStatus(p);
+  const doneHere = ws.slots.filter((s) => s.day === key && s.doneOn);
+  if (doneHere.length) {
+    h += `<div class="hrow lift" style="gap:8px;font-weight:600;margin-top:-6px">${svg('<path d="M5 12.5l4.5 4.5L19 7.5"/>', 18, 3)}
+      ${doneHere.map((s) => `${esc(s.name)} done ${s.doneOn === today() ? 'today' : dayShort(s.doneOn)}`).join(' and ')}</div>`;
+  }
+
   if (w) {
     if (!w.items.length) {
       h += `<div class="empty">No exercises in ${esc(w.name)} yet.</div>
@@ -284,6 +291,12 @@ function vToday() {
   if (!w && !d.run) {
     h += `<p class="sub">Nothing planned${notToday ? '' : ' today'}.</p>
       <button class="btn btn-ghost" data-act="daySheet" data-day="${key}">Plan ${DAY_LONG[key]}</button>`;
+  }
+  // Anything else still to do this week, one tap to do it now instead.
+  const left = ws.slots.filter((s) => !s.doneOn && s.day !== key);
+  if (left.length && !finished) {
+    h += `<div class="stack4" style="margin-top:4px"><div class="eyebrow">Left this week</div>
+      <div class="tags" style="gap:8px">${left.map((s) => `<button class="tag ${s.kind === 'run' ? 'run' : 'lift'} todo" data-act="doDay" data-day="${s.day}" style="border:none;min-height:40px;padding:8px 12px">${esc(s.name)} <span style="font-weight:500;opacity:.75">${DAY_LONG[s.day].slice(0, 3)}</span></button>`).join('')}</div></div>`;
   }
   h += `<button class="btn btn-ghost" data-act="pickDay">Do a different day</button>`;
   return h;
@@ -466,6 +479,67 @@ function sTarget() {
 
 // ---------- weekly program ----------
 
+// This week's plan matched against what was actually logged. A planned workout or run
+// counts as done when it was logged on ANY day this week, so swapping days is no problem.
+function weekStatus(p) {
+  const mon = L.addDays(today(), -((new Date().getDay() + 6) % 7));
+  const sun = L.addDays(mon, 6);
+  const inWeek = (x) => x.date >= mon && x.date <= sun;
+  const sessions = S.sessions.filter(inWeek);
+  const runs = S.runs.filter(inWeek);
+  const usedS = new Set(), usedR = new Set();
+  const slots = [];
+  DAYS.forEach((k, i) => {
+    const d = p.days[k] || {};
+    const date = L.addDays(mon, i);
+    if (d.workout && p.workouts[d.workout]) {
+      const s = sessions.find((x) => x.workoutId === d.workout && !usedS.has(x.id));
+      if (s) usedS.add(s.id);
+      slots.push({ day: k, date, kind: 'lift', key: d.workout, name: p.workouts[d.workout].name, doneOn: s ? s.date : null });
+    }
+    if (d.run) {
+      const r = runs.find((x) => x.type === d.run && !usedR.has(x.id));
+      if (r) usedR.add(r.id);
+      slots.push({ day: k, date, kind: 'run', key: d.run, name: RUN[d.run], doneOn: r ? r.date : null });
+    }
+  });
+  const extras = [
+    ...sessions.filter((s) => !usedS.has(s.id)).map((s) => ({ kind: 'lift', name: s.workoutName, date: s.date })),
+    ...runs.filter((r) => !usedR.has(r.id)).map((r) => ({ kind: 'run', name: RUN[r.type], date: r.date })),
+  ];
+  return { mon, sun, slots, extras };
+}
+
+const dayShort = (iso) => DAY_LONG[DAYS[(L.parseDate(iso).getDay() + 6) % 7]].slice(0, 3);
+
+function slotTag(s) {
+  const kind = s.kind === 'run' ? 'run' : 'lift';
+  if (s.doneOn) {
+    const moved = s.doneOn !== s.date ? ` <span style="font-weight:500;opacity:.8">(${dayShort(s.doneOn)})</span>` : '';
+    return `<span class="tag ${kind}">${svg('<path d="M5 12.5l4.5 4.5L19 7.5"/>', 14, 3)} ${esc(s.name)}${moved}</span>`;
+  }
+  if (s.date < today()) return `<span class="tag missed">${esc(s.name)} · missed</span>`;
+  return `<span class="tag ${kind} todo">${esc(s.name)}</span>`;
+}
+
+function vThisWeek(p) {
+  const ws = weekStatus(p);
+  const done = ws.slots.filter((s) => s.doneOn).length;
+  const left = ws.slots.filter((s) => !s.doneOn && s.date >= today());
+  return `
+    <div class="sub">${esc(L.fmtDate(ws.mon))} – ${esc(L.fmtDate(ws.sun))} · <span class="${done === ws.slots.length && done ? 'lift' : ''}">${done} of ${ws.slots.length} done</span></div>
+    ${left.length ? `<div class="small" style="margin-top:-10px">Left: ${left.map((s) => esc(s.name)).join(', ')}</div>` : ''}
+    <div class="stack">${DAYS.map((k, i) => {
+      const date = L.addDays(ws.mon, i);
+      const tags = ws.slots.filter((s) => s.day === k).map(slotTag).join('')
+        + ws.extras.filter((x) => x.date === date).map((x) => `<span class="tag ${x.kind === 'run' ? 'run' : 'lift'}">${svg('<path d="M5 12.5l4.5 4.5L19 7.5"/>', 14, 3)} ${esc(x.name)} <span style="font-weight:500;opacity:.8">(extra)</span></span>`).join('');
+      return `<button class="row ${k === todayKey() ? 'today' : ''} ${tags ? '' : 'dashed'}" data-act="doDay" data-day="${k}" style="justify-content:flex-start">
+        <span class="stack4" style="gap:0;width:40px;flex-shrink:0"><span class="dayname">${k.toUpperCase()}</span><span class="small">${L.parseDate(date).getDate()}</span></span>
+        ${tags ? `<span class="tags">${tags}</span>` : '<span class="small grow">Rest</span>'}</button>`;
+    }).join('')}</div>
+    <div class="small">Do any workout on any day — it ticks off that workout's slot this week. Tap a day to do it now. Your plan doesn't change.</div>`;
+}
+
 function vWeek() {
   const p = cur();
   if (!p) {
@@ -473,8 +547,19 @@ function vWeek() {
       <button class="btn btn-primary" data-act="go" data-to="newprogram">New program</button>
       <button class="btn btn-ghost" data-act="go" data-to="programs">Programs & Archive</button>`;
   }
-  return `
-    <div class="stack4"><h1>My week</h1><div class="sub">${esc(p.name)} · ${esc(weekLabel(p))} · tap a day to change it, drag ⠿ onto another day to swap</div></div>
+  const tab = ui.weekTab || 'this';
+  const head = `<div class="stack4"><h1>My week</h1><div class="small">${esc(p.name)} · ${esc(weekLabel(p))}</div></div>
+    <div class="seg" role="tablist">
+      <button role="tab" data-act="weekTab" data-v="this" aria-pressed="${tab === 'this'}" aria-selected="${tab === 'this'}">This week</button>
+      <button role="tab" data-act="weekTab" data-v="plan" aria-pressed="${tab === 'plan'}" aria-selected="${tab === 'plan'}">Plan</button>
+    </div>`;
+  const foot = `<div class="grid2">
+      <button class="btn btn-ghost" data-act="go" data-to="programs">Programs</button>
+      <button class="btn btn-ghost" data-act="backup">Back up data</button>
+    </div>`;
+  if (tab === 'this') return head + vThisWeek(p) + foot;
+  return head + `
+    <div class="sub" style="margin-top:-8px">Your repeating week. Tap a day to change it, drag ⠿ onto another day to swap them for good.</div>
     <div class="stack" data-sortable="days" data-mode="swap">${DAYS.map((k, i) => {
       const d = p.days[k] || {};
       const w = d.workout && p.workouts[d.workout];
@@ -483,10 +568,7 @@ function vWeek() {
         <span class="dayname">${k.toUpperCase()}</span>${tags ? `<span class="tags">${tags}</span>` : '<span class="small grow">Rest · tap to add</span>'}
         <span class="handle" data-handle aria-label="Drag onto another day to swap">${I.grip}</span></button>`;
     }).join('')}</div>
-    <div class="grid2">
-      <button class="btn btn-ghost" data-act="go" data-to="programs">Programs</button>
-      <button class="btn btn-ghost" data-act="backup">Back up data</button>
-    </div>`;
+    ${foot}`;
 }
 
 function sDay() {
@@ -1480,6 +1562,15 @@ const A = {
     else go('archive');
   },
 
+  weekTab(d) {
+    ui.weekTab = d.v;
+    render();
+  },
+  // Show a day's planned workout/run on Today so it can be done now.
+  doDay(d) {
+    ui.day = d.day === todayKey() ? null : d.day;
+    go('today');
+  },
   chartMode(d) {
     ui.chart = d.v;
     render();

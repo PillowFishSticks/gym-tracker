@@ -27,6 +27,10 @@ Exercises are remembered across programs, so adding "Leg press" to a new program
 
 Three types: threshold, long and easy. Enter any two of distance, time and pace and the third is filled in. Each run is compared with your last one of the same type, and progress is judged on pace (faster = better) for every run type.
 
+## This week
+
+**Program → This week** shows Monday–Sunday with what you've done. Do any workout on any day and it ticks off that workout's slot (e.g. Glutes done Thursday shows as ✓ Glutes (Thu) on Friday). Missed ones are marked, and **Today** lists what's left so you can do any of it now. Your plan itself doesn't change — use **Plan** to change it for good.
+
 ## Programs
 
 A program is your week (which workout and/or run goes on which day) for a set number of weeks. When it ends, start the next one — copy the old one or start blank — and the old one moves to the **Archive**, where you can compare lifts and runs across months and years.
