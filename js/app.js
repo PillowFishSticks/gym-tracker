@@ -243,7 +243,7 @@ function vToday() {
   const finished = L.weekOf(p.startDate, today()) > p.weeks;
   const notToday = ui.day && ui.day !== todayKey();
 
-  let h = `${notToday ? `<button class="backtoday" data-act="backWeek">${I.back} My week</button>` : ''}
+  let h = `${notToday ? (ui.dayFrom === 'week' ? `<button class="backtoday" data-act="backWeek">${I.back} My week</button>` : `<button class="backtoday" data-act="cancelDay">${I.close} Cancel</button>`) : ''}
     <div class="stack4">
       <div class="eyebrow">${DAY_LONG[key]}${notToday ? ' (picked)' : ''} · ${esc(weekLabel(p))}</div>
       <h1>${esc(w ? w.name : d.run ? RUN[d.run] : 'Rest day')}</h1>
@@ -282,6 +282,7 @@ function vToday() {
         })
         .join('')}</div>`;
       if (!S.active) h += `<button class="btn btn-primary" data-act="start" data-id="${w.id}">Start workout</button>`;
+      if (!S.active && notToday) h += `<button class="btn btn-ghost" data-act="cancelDay">Cancel, back to ${DAY_LONG[todayKey()]}</button>`;
     }
   }
 
@@ -1422,7 +1423,13 @@ const A = {
   pickDay: () => openSheet(sPickDay),
   setDay(d) {
     ui.day = d.day === todayKey() ? null : d.day;
+    ui.dayFrom = 'today';
     closeSheet();
+    render(true);
+  },
+  // Picked a day by mistake: back to today's own plan, nothing started.
+  cancelDay() {
+    ui.day = null;
     render(true);
   },
 
@@ -1743,6 +1750,7 @@ const A = {
   // Show a day's planned workout/run on Today so it can be done now.
   doDay(d) {
     ui.day = d.day === todayKey() ? null : d.day;
+    ui.dayFrom = 'week';
     go('today');
   },
   chartMode(d) {
