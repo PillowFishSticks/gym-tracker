@@ -46,6 +46,8 @@ Plain HTML, CSS and JavaScript — no build step. Run any static server in this 
 ## Fixing mistakes and changing order
 
 - **Busy machine?** During a workout tap the list icon (top right) and pick any exercise to do next. Sets already done are kept.
+- **Change things just for today:** during a workout tap **Swap, skip or change superset** (or any exercise in the list) to swap it for another exercise, skip it (or stop early and keep the sets you did), take it out of a superset or superset it with something else. **+ Add an exercise for today** adds an extra. Your plan stays the same, and a swapped exercise keeps its own targets.
+- **Change the plan mid-workout:** the list's **Change the plan for this workout** opens the workout editor. Anything you change there (sets, reps, new exercises, supersets) updates the workout you're doing straight away, keeping your logged sets and today's swaps and skips.
 - **Mistyped a set?** Tap "Done: …" on the set screen, or a finished exercise in the list, to change reps/weight or delete a set. Past sessions can be fixed from **Progress → exercise → Recent sessions**. Runs can be edited by tapping them.
 - **Supersets:** tap an exercise in a workout → **Superset with …** to link it to the next one (2 or 3+). During the workout their sets alternate: A, B, A, B…
 - **Reorder exercises** by dragging the ⠿ handle in a workout. **Swap two days** by dragging a day's ⠿ onto another day.

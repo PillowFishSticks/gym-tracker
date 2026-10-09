@@ -32,6 +32,7 @@ const num = (v) => {
 };
 
 function save() {
+  followPlan();
   S.savedAt = Date.now();
   if (!persist(S)) toast('Could not save — phone storage may be full');
   if (!S.demo && Sync.getSession()) {
@@ -484,6 +485,7 @@ function sPickDay() {
 function vTrain() {
   const a = S.active;
   const it = a.items[a.ex];
+  if (!it) return `<div class="stack4"><h1>All done</h1><div class="sub">Nothing left in this workout.</div></div><button class="btn btn-primary" data-act="finishNow">Finish workout</button>`;
   const t = targetFor(it.exId, it);
   const logs = a.logs[it.k] || [];
   const prev = exSessions(it.exId).at(-1);
@@ -503,6 +505,8 @@ function vTrain() {
       ${it.group ? `<div><span class="tag lift">Superset${(() => { const n = nextInSuperset(a, it); return n ? ` · next: ${esc(exName(n.exId))}` : ' · last one'; })()}</span></div>` : ''}
       <h1>${esc(exName(it.exId))}</h1>
       <div class="sub">Range ${it.min}–${it.max} reps · ${prev ? `last time ${esc(setsText(prev.sets))}` : 'first time'}</div>
+      ${todayNote(it) ? `<div class="small">${esc(todayNote(it))}</div>` : ''}
+      <button class="linkbtn" data-act="exOpts" data-k="${it.k}" style="align-self:flex-start;padding:4px 0">Swap, skip or change superset</button>
     </div>
     <div class="setbars" aria-hidden="true">${bars.map((c) => `<span class="${c}"></span>`).join('')}</div>
     <div class="setcard">
@@ -528,20 +532,174 @@ function vTrain() {
 // Logs are keyed by each item's `k` (not its position) so skipped exercises can move to the end.
 function sQueue() {
   const a = S.active;
+  const now = a.items[a.ex];
   return `
-    <div class="stack4"><h2>What's next?</h2><div class="sub">Tap any exercise to do it now. Sets you've done are kept.</div></div>
+    <div class="stack4"><h2>What's next?</h2><div class="sub">Tap an exercise to do it now, swap it, skip it or change its superset — just for today.</div></div>
     <div class="stack">${a.items.map((it, i) => {
       const done = (a.logs[it.k] || []).length;
       const status = `${done}/${it.sets} sets`;
+      const note = todayNote(it) ? `<div class="meta">${esc(todayNote(it))}</div>` : '';
+      const name = `<div><div class="name${i < a.ex ? ' muted' : ''}">${esc(exName(it.exId))}${it.group ? '<span class="sslabel">Superset</span>' : ''}</div>${note}</div>`;
       if (i < a.ex) {
-        return `<button class="row" data-act="editActive" data-k="${it.k}"><span class="name muted">${esc(exName(it.exId))}</span><span class="hrow small" style="gap:6px"><span class="lift">${svg('<path d="M5 12.5l4.5 4.5L19 7.5"/>', 18, 3)}</span>Done · edit</span></button>`;
+        return `<button class="row ${ssClass(a.items, i)}" data-act="editActive" data-k="${it.k}">${name}<span class="hrow small" style="gap:6px"><span class="lift">${svg('<path d="M5 12.5l4.5 4.5L19 7.5"/>', 18, 3)}</span>${it.stop ? 'Stopped' : 'Done'} · edit</span></button>`;
       }
       if (i === a.ex) {
-        return `<div class="row" style="box-shadow: inset 0 0 0 2px ${LIME}"><span class="name">${esc(exName(it.exId))}</span><span class="small lift">Now · ${status}</span></div>`;
+        return `<button class="row ${ssClass(a.items, i)}" data-act="exOpts" data-k="${it.k}" style="box-shadow: inset 0 0 0 2px ${LIME}">${name}<span class="small lift">Now · ${status}</span></button>`;
       }
-      return `<button class="row" data-act="jumpEx" data-i="${i}"><span class="name">${esc(exName(it.exId))}</span><span class="small">${status}</span></button>`;
+      return `<button class="row ${ssClass(a.items, i)}" data-act="exOpts" data-k="${it.k}">${name}<span class="small">${status}</span></button>`;
     }).join('')}</div>
-    <button class="btn btn-ghost" data-act="closeSheet">Keep going with ${esc(exName(a.items[a.ex].exId))}</button>`;
+    <button class="btn btn-ghost btn-small" data-act="addTodayForm">+ Add an exercise for today</button>
+    <button class="btn btn-ghost btn-small" data-act="editPlan">Change the plan for this workout</button>
+    ${now ? `<button class="btn btn-ghost" data-act="closeSheet">Keep going with ${esc(exName(now.exId))}</button>` : ''}`;
+}
+
+// ---------- today-only changes during a workout ----------
+// Swaps, skips, extra exercises and superset changes only touch S.active, never the plan.
+// it.from = the planned exercise a swap replaced; it.today = added just for today;
+// it.tg = superset changed today (plan edits won't regroup it); it.stop = finished early.
+
+const planKey = (x) => x.from || x.exId;
+const isDone = (a, x) => !!x.stop || (a.logs[x.k] || []).length >= x.sets;
+const activeItem = (k) => S.active.items.find((x) => String(x.k) === String(k));
+
+function nextK(a) {
+  const used = [...a.items.map((x) => x.k), ...Object.keys(a.logs).map(Number)];
+  a.nextK = Math.max(a.nextK || 0, ...used.map((k) => k + 1), 0);
+  return a.nextK++;
+}
+
+function todayNote(it) {
+  if (it.today) return 'Added today';
+  if (it.from) return `Instead of ${exName(it.from)} today`;
+  return '';
+}
+
+const planOf = (a) => prog(a.programId)?.workouts[a.workoutId] || null;
+const planSig = (w) => JSON.stringify(w.items.map((x) => [x.exId, x.sets, x.min, x.max, x.group || '']));
+
+// The plan for this workout was edited mid-workout: bring the changes into the workout in
+// progress, keeping what's been logged and today's own swaps, skips and extras.
+function followPlan() {
+  const a = S.active;
+  const w = a && planOf(a);
+  if (!w) return;
+  const sig = planSig(w);
+  if (a.planSig === sig) return;
+  const first = a.planSig == null; // older workouts didn't record it: just start following
+  a.planSig = sig;
+  if (first) return;
+  const skipped = a.skipped || [];
+  const logged = (x) => (a.logs[x.k] || []).length > 0;
+  const used = new Set();
+  const order = [];
+  for (const p of w.items) {
+    let x = a.items.find((y) => !used.has(y) && planKey(y) === p.exId);
+    if (!x) {
+      if (skipped.includes(p.exId)) continue;
+      x = { exId: p.exId, sets: p.sets, min: p.min, max: p.max, k: nextK(a), ...(p.group ? { group: p.group } : {}) };
+    } else if (!x.from) {
+      Object.assign(x, { sets: p.sets, min: p.min, max: p.max });
+    }
+    if (!x.tg) {
+      if (p.group) x.group = p.group;
+      else delete x.group;
+    }
+    used.add(x);
+    order.push(x);
+  }
+  // Extras added today, and anything already logged that's no longer in the plan, stay.
+  const extras = a.items.filter((x) => !used.has(x) && (x.today || logged(x)));
+  const keep = new Set([...order, ...extras]);
+  const now = a.items[a.ex];
+  const done = a.items.filter((x) => keep.has(x) && isDone(a, x));
+  // The exercise you're on (with its superset partners, in their current turn order) stays put
+  // once any of them has a set logged.
+  const block = now && keep.has(now) && !isDone(a, now)
+    ? [now, ...(now.group ? a.items.slice(a.ex + 1).filter((x) => x.group === now.group && keep.has(x) && !isDone(a, x)) : [])]
+    : [];
+  const pinned = block.some(logged) ? block : [];
+  const todo = order.filter((x) => !isDone(a, x) && !pinned.includes(x));
+  for (const e of extras) {
+    if (isDone(a, e) || pinned.includes(e)) continue;
+    const before = a.items.slice(0, a.items.indexOf(e)).reverse().find((y) => todo.includes(y));
+    todo.splice(before ? todo.indexOf(before) + 1 : 0, 0, e);
+  }
+  a.items = [...done, ...pinned, ...todo];
+  a.ex = done.length;
+  normGroups(a.items);
+}
+
+// Options for one exercise in the workout in progress.
+function sExOpts() {
+  const a = S.active;
+  const it = activeItem(ui.opt);
+  if (!it) return '<div class="empty">That exercise has gone.</div>';
+  const i = a.items.indexOf(it);
+  const n = (a.logs[it.k] || []).length;
+  const others = a.items.filter((x, j) => j >= a.ex && x !== it && (!it.group || x.group !== it.group));
+  return `
+    <div class="stack4"><h2>${esc(exName(it.exId))}</h2><div class="sub">${n}/${it.sets} sets${todayNote(it) ? ' · ' + esc(todayNote(it)) : ''}</div></div>
+    ${i !== a.ex ? `<button class="btn btn-primary" data-act="jumpEx" data-i="${i}">Do this now</button>` : ''}
+    <div class="eyebrow">Just for today</div>
+    <div class="stack" style="gap:8px">
+      ${n ? '' : `<button class="btn btn-ghost btn-small" data-act="swapForm" data-k="${it.k}">Swap for another exercise</button>`}
+      ${it.group ? `<button class="btn btn-ghost btn-small" data-act="ssOut" data-k="${it.k}">Take out of superset</button>` : ''}
+      ${others.map((x) => `<button class="btn btn-ghost btn-small" data-act="ssWith" data-k="${it.k}" data-w="${x.k}" style="color:var(--lift)">${it.group ? 'Add' : 'Superset with'} ${esc(exName(x.exId))}${it.group ? ' to superset' : ''}</button>`).join('')}
+      <button class="btn btn-ghost btn-small" data-act="skipEx" data-k="${it.k}" style="color:var(--miss)">${n ? `Stop here · ${n} set${n > 1 ? 's' : ''} is enough` : 'Skip it today'}</button>
+    </div>
+    <div class="small">Your plan stays the same. To change it for good, use “Change the plan” in the exercise list.</div>`;
+}
+
+// The name / sets / reps / kg fields, shared by "Add exercise" in the plan and today's swaps and extras.
+function exFields(d = {}) {
+  const names = Object.values(S.exercises).map((e) => e.name).sort((a, b) => a.localeCompare(b));
+  return `
+      <label class="field">Name<input class="input" name="exname" list="exlist" data-input="exname" required placeholder="e.g. Bicycle crunch" autocapitalize="sentences"></label>
+      <datalist id="exlist">${names.map((n) => `<option value="${esc(n)}"></option>`).join('')}</datalist>
+      <div class="grid4">
+        <label class="field">Sets<input class="input num" name="sets" type="number" inputmode="numeric" min="1" max="20" value="${d.sets ?? 3}" required></label>
+        <label class="field">Min reps<input class="input num" name="min" type="number" inputmode="numeric" min="1" max="100" value="${d.min ?? 10}" required></label>
+        <label class="field">Max reps<input class="input num" name="max" type="number" inputmode="numeric" min="1" max="100" value="${d.max ?? 15}" required></label>
+        <label class="field">kg<input class="input num" name="kg" type="text" inputmode="decimal" placeholder="0"></label>
+      </div>
+      <label class="hrow small" style="justify-content:space-between">When you hit the top of the range, add
+        <span class="hrow" style="gap:8px"><input class="input num" name="step" type="text" inputmode="decimal" value="2.5" style="width:84px;height:46px" aria-label="Weight jump in kg">kg</span></label>
+      <div class="small" id="exhint"></div>`;
+}
+
+// Read exFields: finds or creates the exercise and sets its starting target if needed.
+function exFromForm(f) {
+  const name = f.exname.value.trim();
+  if (!name) return null;
+  const sets = int(f.sets.value, 1, 20, 3);
+  const min = int(f.min.value, 1, 100, 10);
+  const max = Math.max(min, int(f.max.value, 1, 100, min));
+  const kg = f.kg.value.trim() === '' ? null : num(f.kg.value);
+  const step = num(f.step.value) || 2.5;
+  let ex = findExByName(name);
+  const known = !!ex;
+  if (!ex) {
+    ex = { id: uid(), name, step };
+    S.exercises[ex.id] = ex;
+  } else {
+    ex.step = step;
+  }
+  const t = S.targets[ex.id];
+  if (!t) S.targets[ex.id] = { weight: kg || 0, reps: min, sets: [min], miss: 0 };
+  else if (kg != null && kg !== t.weight) S.targets[ex.id] = { weight: kg, reps: min, sets: [min], miss: 0 };
+  return { ex, sets, min, max, carried: known && !!t };
+}
+
+// Swap an exercise (ui.swap = { k }) or add one (ui.swap = { k: null }) for today only.
+function sSwap() {
+  const it = ui.swap.k != null ? activeItem(ui.swap.k) : null;
+  return `
+    <div class="stack4"><h2>${it ? `Swap ${esc(exName(it.exId))}` : 'Add an exercise'}</h2>
+      <div class="sub">Just for today${it && it.group ? ' · stays in the superset' : ''}. Your plan stays the same.</div></div>
+    <form class="addform" data-submit="${it ? 'swapEx' : 'addToday'}" autocomplete="off" style="margin:0">
+      ${exFields(it || {})}
+      <button class="btn btn-primary" type="submit" style="height:58px;font-size:24px">${it ? 'Swap' : 'Add'}</button>
+    </form>`;
 }
 
 // Edit logged sets: used during a workout and for past sessions.
@@ -623,7 +781,7 @@ function nextInSuperset(a, it) {
   while (end < a.items.length && a.items[end].group === it.group) end++;
   const block = a.items.slice(a.ex, end);
   const pos = block.indexOf(it);
-  return [...block.slice(pos + 1), ...block.slice(0, pos)].find((x) => (a.logs[x.k] || []).length < x.sets) || null;
+  return [...block.slice(pos + 1), ...block.slice(0, pos)].find((x) => !isDone(a, x)) || null;
 }
 
 function logSet(set) {
@@ -631,7 +789,7 @@ function logSet(set) {
   const it = a.items[a.ex];
   (a.logs[it.k] = a.logs[it.k] || []).push(set);
   a.hist.push(it.k);
-  const done = (x) => (a.logs[x.k] || []).length >= x.sets;
+  const done = (x) => isDone(a, x);
   if (it.group) {
     // Rotate the superset so the next member with sets left comes up; finished ones move behind.
     let end = a.ex;
@@ -668,7 +826,7 @@ function finishWorkout() {
   const entries = [];
   a.items.forEach((it) => {
     const sets = a.logs[it.k];
-    if (sets && sets.length) entries.push({ exId: it.exId, cfg: { sets: it.sets, min: it.min, max: it.max }, target: targetFor(it.exId, it), sets });
+    if (sets && sets.length) entries.push({ exId: it.exId, cfg: { sets: it.stop ? sets.length : it.sets, min: it.min, max: it.max }, target: targetFor(it.exId, it), sets });
   });
   S.active = null;
   wake(false);
@@ -920,9 +1078,10 @@ function vWorkout(params) {
   const w = p && p.workouts[params.id];
   if (!w) return vWeek();
   const used = DAYS.filter((k) => p.days[k]?.workout === w.id).map((k) => DAY_LONG[k]).join(', ') || 'Not on any day yet';
-  const names = Object.values(S.exercises).map((e) => e.name).sort((a, b) => a.localeCompare(b));
+  const live = S.active && S.active.programId === p.id && S.active.workoutId === w.id;
   return `
     <div class="hrow"><button class="iconbtn" data-act="backFromWorkout" aria-label="Back">${I.back}</button><div class="small">${esc(used)}</div></div>
+    ${live ? `<div class="row" style="box-shadow: inset 0 0 0 2px ${LIME}"><div><div class="name">You're doing this workout now</div><div class="meta">Changes here update it straight away. Sets you've logged are kept.</div></div><button class="btn btn-primary btn-small" data-act="go" data-to="train" style="width:auto;padding:0 16px;white-space:nowrap">Back to it</button></div>` : ''}
     <label class="field">Workout name<input class="input" data-change="wname" data-id="${w.id}" value="${esc(w.name)}" style="font-family:var(--cond);font-size:26px;font-weight:700"></label>
     ${w.items.length > 1 ? '<div class="small" style="margin-bottom:-8px">Drag ⠿ to reorder · tap to edit</div>' : ''}
     <div class="stack" data-sortable="ex" data-wid="${w.id}">${w.items.length
@@ -936,17 +1095,7 @@ function vWorkout(params) {
       : '<div class="empty">No exercises yet. Add the first one below.</div>'}</div>
     <form class="addform" data-submit="addEx" data-id="${w.id}" autocomplete="off">
       <div class="eyebrow">Add exercise</div>
-      <label class="field">Name<input class="input" name="exname" list="exlist" data-input="exname" required placeholder="e.g. Machine fly" autocapitalize="sentences"></label>
-      <datalist id="exlist">${names.map((n) => `<option value="${esc(n)}"></option>`).join('')}</datalist>
-      <div class="grid4">
-        <label class="field">Sets<input class="input num" name="sets" type="number" inputmode="numeric" min="1" max="20" value="3" required></label>
-        <label class="field">Min reps<input class="input num" name="min" type="number" inputmode="numeric" min="1" max="100" value="10" required></label>
-        <label class="field">Max reps<input class="input num" name="max" type="number" inputmode="numeric" min="1" max="100" value="15" required></label>
-        <label class="field">kg<input class="input num" name="kg" type="text" inputmode="decimal" placeholder="0"></label>
-      </div>
-      <label class="hrow small" style="justify-content:space-between">When you hit the top of the range, add
-        <span class="hrow" style="gap:8px"><input class="input num" name="step" type="text" inputmode="decimal" value="2.5" style="width:84px;height:46px" aria-label="Weight jump in kg">kg</span></label>
-      <div class="small" id="exhint"></div>
+      ${exFields()}
       <button class="btn btn-primary" type="submit" style="height:58px;font-size:24px">Add</button>
     </form>
     <button class="btn btn-danger btn-small" data-act="delWorkout" data-id="${w.id}">Delete this workout</button>`;
@@ -1631,7 +1780,7 @@ const A = {
   start(d) {
     const p = cur();
     const w = p.workouts[d.id];
-    S.active = { programId: p.id, workoutId: w.id, workoutName: w.name, date: today(), started: Date.now(), items: w.items.map((i, k) => ({ ...i, k })), ex: 0, logs: {}, hist: [] };
+    S.active = { programId: p.id, workoutId: w.id, workoutName: w.name, date: today(), started: Date.now(), items: w.items.map((i, k) => ({ ...i, k })), ex: 0, logs: {}, hist: [], nextK: w.items.length, skipped: [], planSig: planSig(w) };
     save();
     wake(true);
     go('train');
@@ -1677,6 +1826,7 @@ const A = {
     // Bring that exercise back to be the current one (works inside supersets too).
     const i = a.items.findIndex((x) => x.k === k);
     const [it] = a.items.splice(i, 1);
+    delete it.stop;
     if (i < a.ex) a.ex--;
     a.items.splice(a.ex, 0, it);
     save();
@@ -1691,12 +1841,12 @@ const A = {
       a.hist = a.hist.filter((k) => k !== it.k).concat(sets.map(() => it.k));
       // a finished exercise that now has sets missing comes back as the current one
       const i = a.items.indexOf(it);
-      if (i < a.ex && sets.length < it.sets) {
+      if (i < a.ex && !isDone(a, it)) {
         a.items.splice(i, 1);
         a.items.splice(a.ex - 1, 0, it);
         a.ex--;
       }
-      if (i === a.ex && sets.length >= it.sets) a.ex++;
+      if (i === a.ex && isDone(a, it)) a.ex++;
       if (a.ex >= a.items.length) return finishWorkout();
     });
   },
@@ -1739,10 +1889,96 @@ const A = {
   jumpEx(d) {
     const a = S.active;
     const [it] = a.items.splice(Number(d.i), 1);
-    a.items.splice(a.ex, 0, it);
+    // bring its superset partners along so they still alternate
+    const mates = it.group ? a.items.filter((x, j) => j >= a.ex && x.group === it.group) : [];
+    a.items = a.items.filter((x) => !mates.includes(x));
+    a.items.splice(a.ex, 0, it, ...mates);
     save();
     closeSheet();
     render(true);
+  },
+  finishNow: () => finishWorkout(),
+  exOpts(d) {
+    ui.opt = d.k;
+    openSheet(sExOpts);
+  },
+  swapForm(d) {
+    ui.swap = { k: d.k };
+    openSheet(sSwap);
+  },
+  addTodayForm() {
+    ui.swap = { k: null };
+    openSheet(sSwap);
+  },
+  skipEx(d) {
+    const a = S.active;
+    const it = activeItem(d.k);
+    const name = exName(it.exId);
+    const i = a.items.indexOf(it);
+    a.items.splice(i, 1);
+    if ((a.logs[it.k] || []).length) {
+      it.stop = true; // keep what was logged; it now counts as finished
+      a.items.splice(a.ex, 0, it);
+      a.ex++;
+    } else {
+      if (!it.today) (a.skipped = a.skipped || []).push(planKey(it));
+      if (i < a.ex) a.ex--;
+    }
+    normGroups(a.items);
+    closeSheet();
+    if (a.ex >= a.items.length) return finishWorkout();
+    save();
+    render(true);
+    toast(`${name} skipped today`);
+  },
+  ssOut(d) {
+    const a = S.active;
+    const it = activeItem(d.k);
+    const g = it.group;
+    a.items.forEach((x) => { if (x.group === g) x.tg = true; });
+    delete it.group;
+    // move it out of the block so the others stay together
+    a.items.splice(a.items.indexOf(it), 1);
+    let end = a.items.length;
+    for (let j = a.items.length - 1; j >= 0; j--) if (a.items[j].group === g) { end = j + 1; break; }
+    a.items.splice(Math.max(end, a.ex), 0, it);
+    normGroups(a.items);
+    save();
+    renderSheet();
+    render();
+    toast('Out of the superset for today');
+  },
+  ssWith(d) {
+    const a = S.active;
+    const it = activeItem(d.k);
+    const b = activeItem(d.w);
+    const now = a.items[a.ex];
+    const g = it.group || uid();
+    const old = b.group;
+    a.items.forEach((x) => { if (old && x.group === old) x.tg = true; });
+    a.items.splice(a.items.indexOf(b), 1);
+    it.group = b.group = g;
+    let end = a.items.indexOf(it) + 1;
+    while (end < a.items.length && a.items[end].group === g) end++;
+    a.items.splice(end, 0, b);
+    a.items.forEach((x) => { if (x.group === g) x.tg = true; });
+    // if this superset includes the exercise you're on, it starts now
+    if (now && now.group === g) {
+      const blk = a.items.filter((x) => x.group === g && !isDone(a, x));
+      a.items = a.items.filter((x) => !blk.includes(x));
+      const first = blk.indexOf(now);
+      a.items.splice(a.ex, 0, ...blk.slice(first), ...blk.slice(0, first));
+    }
+    normGroups(a.items);
+    save();
+    closeSheet();
+    render(true);
+    toast(`Superset with ${exName(b.exId)} today`);
+  },
+  editPlan() {
+    ui.editFromTrain = true;
+    closeSheet();
+    go('workout', { id: S.active.workoutId });
   },
   endWorkout() {
     const a = S.active;
@@ -1807,6 +2043,11 @@ const A = {
     go('workout', { id: d.id });
   },
   backFromWorkout() {
+    if (ui.editFromTrain && S.active) {
+      ui.editFromTrain = false;
+      go('train');
+      return;
+    }
     const day = ui.editFromDay;
     ui.editFromDay = null;
     ui.weekTab = 'plan';
@@ -2234,30 +2475,40 @@ const SUB = {
     render();
   },
   addEx(form) {
-    const f = form.elements;
-    const name = f.exname.value.trim();
-    if (!name) return;
     const w = cur().workouts[form.dataset.id];
-    const sets = int(f.sets.value, 1, 20, 3);
-    const min = int(f.min.value, 1, 100, 10);
-    const max = Math.max(min, int(f.max.value, 1, 100, min));
-    const kg = f.kg.value.trim() === '' ? null : num(f.kg.value);
-    let ex = findExByName(name);
-    const known = !!ex;
-    const step = num(f.step.value) || 2.5;
-    if (!ex) {
-      ex = { id: uid(), name, step };
-      S.exercises[ex.id] = ex;
-    } else {
-      ex.step = step;
-    }
-    const t = S.targets[ex.id];
-    if (!t) S.targets[ex.id] = { weight: kg || 0, reps: min, sets: [min], miss: 0 };
-    else if (kg != null && kg !== t.weight) S.targets[ex.id] = { weight: kg, reps: min, sets: [min], miss: 0 };
-    w.items.push({ exId: ex.id, sets, min, max });
+    const r = exFromForm(form.elements);
+    if (!r) return;
+    w.items.push({ exId: r.ex.id, sets: r.sets, min: r.min, max: r.max });
     save();
     render();
-    toast(known && t ? `${ex.name} added · carries on from last time` : `${ex.name} added`);
+    toast(r.carried ? `${r.ex.name} added · carries on from last time` : `${r.ex.name} added`);
+  },
+  swapEx(form) {
+    const a = S.active;
+    const it = activeItem(ui.swap.k);
+    const r = it && exFromForm(form.elements);
+    if (!r) return;
+    const was = exName(it.exId);
+    if (r.ex.id !== it.exId) {
+      if (!it.from && !it.today) it.from = it.exId;
+      it.exId = r.ex.id;
+      if (it.from === it.exId) delete it.from; // swapped back to the planned one
+    }
+    Object.assign(it, { sets: r.sets, min: r.min, max: r.max });
+    save();
+    closeSheet();
+    render(true);
+    toast(`${r.ex.name} instead of ${was} today`);
+  },
+  addToday(form) {
+    const a = S.active;
+    const r = exFromForm(form.elements);
+    if (!r) return;
+    a.items.push({ exId: r.ex.id, sets: r.sets, min: r.min, max: r.max, k: nextK(a), today: true });
+    save();
+    closeSheet();
+    render(true);
+    toast(`${r.ex.name} added for today`);
   },
   saveItem(form) {
     const f = form.elements;
