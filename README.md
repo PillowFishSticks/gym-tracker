@@ -29,7 +29,7 @@ Three types: threshold, long and easy. Enter any two of distance, time and pace 
 
 ## This week
 
-**Program → This week** shows Monday–Sunday with what you've done. Do any workout on any day and it ticks off that workout's slot (e.g. Glutes done Thursday shows as ✓ Glutes (Thu) on Friday). Missed ones are marked, and **Today** lists what's left so you can do any of it now. Your plan itself doesn't change — use **Plan** to change it for good.
+**Today → This week** shows Monday–Sunday with what you've done. Do any workout on any day and it ticks off that workout's slot (e.g. Glutes done Thursday shows as ✓ Glutes (Thu) on Friday). Missed ones are marked, and **Today** lists what's left so you can do any of it now. Your plan itself doesn't change — use the **Program** tab to change it for good. On **Program**, tap any day to see its exercises and next targets, then **Change day** if you want to swap it.
 
 ## Programs
 

@@ -355,7 +355,7 @@ function vToday() {
   const finished = L.weekOf(p.startDate, today()) > p.weeks;
   const notToday = ui.day && ui.day !== todayKey();
 
-  let h = `${notToday ? (ui.dayFrom === 'week' ? `<button class="backtoday" data-act="backWeek">${I.back} My week</button>` : `<button class="backtoday" data-act="cancelDay">${I.close} Cancel</button>`) : ''}
+  let h = `${notToday ? (ui.dayFrom === 'week' ? `<button class="backtoday" data-act="backWeek">${I.back} This week</button>` : `<button class="backtoday" data-act="cancelDay">${I.close} Cancel</button>`) : ''}
     <div class="stack4">
       <div class="eyebrow">${DAY_LONG[key]}${notToday ? ' (picked)' : ''} · ${esc(weekLabel(p))}</div>
       <h1>${esc(w ? w.name : d.run ? RUN[d.run] : 'Rest day')}</h1>
@@ -391,13 +391,7 @@ function vToday() {
       h += `<div class="empty">No exercises in ${esc(w.name)} yet.</div>
         <button class="btn btn-ghost" data-act="go" data-to="workout" data-id="${w.id}">Add exercises</button>`;
     } else {
-      h += `<div class="stack">${w.items
-        .map((it, i) => {
-          const t = targetFor(it.exId, it);
-          return `<div class="row exrow ${ssClass(w.items, i)}"><div><div class="name">${esc(exName(it.exId))}</div><div class="meta">${it.group ? '<span class="lift">Superset</span> · ' : ''}${it.sets} sets · ${it.min}–${it.max} reps</div></div>
-            <div class="big">${L.repsText(t.sets)} × ${fmtW(t.weight)}${kgUnit(t.weight)}</div></div>`;
-        })
-        .join('')}</div>`;
+      h += exList(w);
       if (!S.active) h += `<button class="btn btn-primary" data-act="start" data-id="${w.id}">Start workout</button>`;
       if (!S.active && notToday) h += `<button class="btn btn-ghost" data-act="cancelDay">Cancel</button>`;
       if (!S.active && !notToday) h += `<button class="linkbtn skipbtn" data-act="askSkip" data-kind="lift">Skip ${esc(w.name)} today</button>`;
@@ -422,7 +416,23 @@ function vToday() {
       <button class="btn btn-ghost" data-act="daySheet" data-day="${key}">Plan ${DAY_LONG[key]}</button>`;
   }
   h += `<button class="btn btn-ghost" data-act="pickDay">Do a different day</button>`;
+  const ws2 = weekStatus(p);
+  const nDone = ws2.slots.filter((s) => s.doneOn).length;
+  h += `<button class="row" data-act="openWeek">
+      <span><span class="name">This week</span><span class="meta" style="display:block">${nDone} of ${ws2.slots.length} done${weekChanged(p) ? ' · changed for this week' : ''}</span></span>
+      <span class="muted">${I.chevron}</span></button>`;
   return h;
+}
+
+// A workout's exercises with their next targets (Today and the day viewer).
+function exList(w) {
+  return `<div class="stack">${w.items
+    .map((it, i) => {
+      const t = targetFor(it.exId, it);
+      return `<div class="row exrow ${ssClass(w.items, i)}"><div><div class="name">${esc(exName(it.exId))}</div><div class="meta">${it.group ? '<span class="lift">Superset</span> · ' : ''}${it.sets} sets · ${it.min}–${it.max} reps</div></div>
+        <div class="big">${L.repsText(t.sets)} × ${fmtW(t.weight)}${kgUnit(t.weight)}</div></div>`;
+    })
+    .join('')}</div>`;
 }
 
 const doneWhen = (iso) => (iso === today() ? 'today' : `on ${DAY_LONG[DAYS[(L.parseDate(iso).getDay() + 6) % 7]]}`);
@@ -981,6 +991,12 @@ function slotTag(s) {
   return `<span class="tag ${kind} todo">${esc(s.name)}</span>`;
 }
 
+// Opened from Today: this week's days, what's done, and this-week-only changes.
+function sThisWeek() {
+  const p = cur();
+  return `<h2>This week</h2>` + vThisWeek(p) + `<button class="btn btn-ghost" data-act="closeSheet">Close</button>`;
+}
+
 function vThisWeek(p) {
   const ws = weekStatus(p);
   const done = ws.slots.filter((s) => s.doneOn).length;
@@ -1026,7 +1042,24 @@ function sWeekDay() {
     </div>
     <div class="grid2">
       <button class="btn btn-ghost" data-act="doDay" data-day="${k}" ${d.workout || d.run ? '' : 'disabled'}>Do it now</button>
-      <button class="btn btn-primary" data-act="closeSheet" style="height:52px;font-size:22px">Done</button>
+      <button class="btn btn-primary" data-act="openWeek" style="height:52px;font-size:22px">Done</button>
+    </div>`;
+}
+
+// Program tab: tap a day to see its exercises; change it from there.
+function sDayView() {
+  const p = cur();
+  const k = ui.dayEdit;
+  const d = p.days[k] || {};
+  const w = d.workout && p.workouts[d.workout];
+  const sub = [w && `${w.items.length} exercise${w.items.length === 1 ? '' : 's'}`, d.run && RUN[d.run]].filter(Boolean).join(' · ');
+  return `
+    <div class="stack4"><div class="eyebrow">${DAY_LONG[k]}</div><h2>${esc(w ? w.name : d.run ? RUN[d.run] : 'Rest')}</h2>${sub ? `<div class="sub">${esc(sub)}</div>` : ''}</div>
+    ${w ? (w.items.length ? exList(w) : `<div class="empty">No exercises in ${esc(w.name)} yet.</div>`) : ''}
+    ${w && w.items.length ? '<div class="small">Weights and reps are your next targets.</div>' : ''}
+    <div class="grid2">
+      <button class="btn btn-ghost" data-act="changeDay">Change day</button>
+      <button class="btn btn-primary" data-act="closeSheet" style="height:52px;font-size:22px">Close</button>
     </div>`;
 }
 
@@ -1037,25 +1070,19 @@ function vWeek() {
       <button class="btn btn-primary" data-act="go" data-to="newprogram">New program</button>
       <button class="btn btn-ghost" data-act="go" data-to="programs">Programs & Archive</button>`;
   }
-  const tab = ui.weekTab || 'this';
-  const head = `<div class="stack4"><h1>My week</h1><div class="small">${esc(p.name)} · ${esc(weekLabel(p))}</div></div>
-    <div class="seg" role="tablist">
-      <button role="tab" data-act="weekTab" data-v="this" aria-pressed="${tab === 'this'}" aria-selected="${tab === 'this'}">This week</button>
-      <button role="tab" data-act="weekTab" data-v="plan" aria-pressed="${tab === 'plan'}" aria-selected="${tab === 'plan'}">Plan</button>
-    </div>`;
+  const head = `<div class="stack4"><h1>My plan</h1><div class="small">${esc(p.name)} · ${esc(weekLabel(p))}</div></div>`;
   const foot = `<div class="grid2">
       <button class="btn btn-ghost" data-act="go" data-to="programs">Programs</button>
       <button class="btn btn-ghost" data-act="backup">Account</button>
     </div>`;
-  if (tab === 'this') return head + vThisWeek(p) + foot;
   return head + `
-    <div class="sub" style="margin-top:-8px">Your repeating week. Tap a day to change it, drag ⠿ onto another day to swap them for good.</div>
+    <div class="sub" style="margin-top:-8px">Your repeating week. Tap a day to see its exercises or change it, drag ⠿ onto another day to swap them for good.</div>
     <div class="stack" data-sortable="days" data-mode="swap">${DAYS.map((k, i) => {
       const d = p.days[k] || {};
       const w = d.workout && p.workouts[d.workout];
       const tags = (w ? `<span class="tag lift">${esc(w.name)}</span>` : '') + (d.run ? `<span class="tag run">${RUN[d.run]}</span>` : '');
-      return `<button class="row ${tags ? '' : 'dashed'} ${k === todayKey() ? 'today' : ''}" data-idx="${i}" data-act="daySheet" data-day="${k}" style="justify-content:flex-start">
-        <span class="dayname">${k.toUpperCase()}</span>${tags ? `<span class="tags">${tags}</span>` : '<span class="small grow">Rest · tap to add</span>'}
+      return `<button class="row ${tags ? '' : 'dashed'} ${k === todayKey() ? 'today' : ''}" data-idx="${i}" data-act="${tags ? 'viewDay' : 'daySheet'}" data-day="${k}" style="justify-content:flex-start">
+        <span class="dayname">${k.toUpperCase()}</span>${tags ? `<span class="tags">${tags}</span><span class="small muted" style="margin-left:auto">View</span>` : '<span class="small grow">Rest · tap to add</span>'}
         <span class="handle" data-handle aria-label="Drag onto another day to swap">${I.grip}</span></button>`;
     }).join('')}</div>
     ${foot}`;
@@ -2035,6 +2062,12 @@ const A = {
     ui.dayEdit = d.day;
     openSheet(sDay);
   },
+  viewDay(d) {
+    ui.dayEdit = d.day;
+    openSheet(sDayView);
+  },
+  changeDay: () => openSheet(sDay),
+  openWeek: () => openSheet(sThisWeek),
   setDayWorkout(d) {
     const p = cur();
     p.days[ui.dayEdit] = { ...(p.days[ui.dayEdit] || {}), workout: d.id || null };
@@ -2072,7 +2105,6 @@ const A = {
     }
     const day = ui.editFromDay;
     ui.editFromDay = null;
-    ui.weekTab = 'plan';
     if (day) ui.reopen = () => { ui.dayEdit = day; openSheet(sDay); };
     go('week');
   },
@@ -2223,7 +2255,7 @@ const A = {
     const p = cur();
     const day = planDays(p)[todayKey()];
     const name = d.kind === 'run' ? `the ${RUN[day.run].toLowerCase()}` : p.workouts[day.workout].name;
-    ui.ask = { title: `Skip ${name} today?`, body: `It’s taken off ${DAY_LONG[todayKey()]} for this week only. Your plan stays the same, and Program → This week → Reset to plan brings it back.`, yes: 'Skip', act: 'skipToday', id: d.kind };
+    ui.ask = { title: `Skip ${name} today?`, body: `It’s taken off ${DAY_LONG[todayKey()]} for this week only. Your plan stays the same, and Today → This week → Reset to plan brings it back.`, yes: 'Skip', act: 'skipToday', id: d.kind };
     openSheet(sAsk);
   },
   skipToday(d) {
@@ -2272,19 +2304,17 @@ const A = {
     toast('Back to your plan for this week');
     render();
   },
-  weekTab(d) {
-    ui.weekTab = d.v;
-    render();
-  },
-  // From a picked day back to the weekly view; Today goes back to showing today.
+  // From a picked day back to the week panel; Today goes back to showing today.
   backWeek() {
     ui.day = null;
-    go('week');
+    render(true);
+    openSheet(sThisWeek);
   },
   // Show a day's planned workout/run on Today so it can be done now.
   doDay(d) {
     ui.day = d.day === todayKey() ? null : d.day;
     ui.dayFrom = 'week';
+    closeSheet();
     go('today');
   },
   toggleSec(d) {
