@@ -891,6 +891,9 @@ function sTarget() {
 
 const weekMonday = () => L.addDays(today(), -((new Date().getDay() + 6) % 7));
 
+// Days from today to Sunday: the ones a plan change should still reach this week.
+const comingDays = () => DAYS.filter((k, i) => L.addDays(weekMonday(), i) >= today());
+
 function weekDays(p) {
   const t = p.thisWeek;
   if (!t || t.mon !== weekMonday()) return null;
@@ -898,13 +901,29 @@ function weekDays(p) {
     t.days = Object.fromEntries(DAYS.map((k) => [k, { ...(p.days[t.map[k]] || {}) }]));
     delete t.map;
   }
+  // Copies made before plan edits reached this week can be holding stale days
+  // (e.g. a day planned on the Plan tab still showing as rest on Today). Bring the
+  // coming days back in line with the plan once.
+  if (!t.v) {
+    for (const k of comingDays()) t.days[k] = { ...(p.days[k] || {}) };
+    t.v = 2;
+  }
   return t.days;
 }
 
 // This week's days, creating the copy on first change.
 function ensureWeek(p) {
-  if (!weekDays(p)) p.thisWeek = { mon: weekMonday(), days: Object.fromEntries(DAYS.map((k) => [k, { ...(p.days[k] || {}) }])) };
+  if (!weekDays(p)) p.thisWeek = { v: 2, mon: weekMonday(), days: Object.fromEntries(DAYS.map((k) => [k, { ...(p.days[k] || {}) }])) };
   return p.thisWeek.days;
+}
+
+// A change on the Plan tab also applies to today and the rest of this week,
+// so Today never shows something different from the plan you just set.
+function planToWeek(p, keys) {
+  const o = weekDays(p);
+  if (!o) return;
+  const coming = comingDays();
+  for (const k of keys) if (coming.includes(k)) o[k] = { ...(p.days[k] || {}) };
 }
 
 function planDays(p) {
@@ -2019,12 +2038,14 @@ const A = {
   setDayWorkout(d) {
     const p = cur();
     p.days[ui.dayEdit] = { ...(p.days[ui.dayEdit] || {}), workout: d.id || null };
+    planToWeek(p, [ui.dayEdit]);
     save();
     render();
   },
   setDayRun(d) {
     const p = cur();
     p.days[ui.dayEdit] = { ...(p.days[ui.dayEdit] || {}), run: d.v || null };
+    planToWeek(p, [ui.dayEdit]);
     save();
     render();
   },
@@ -2033,6 +2054,7 @@ const A = {
     const w = { id: uid(), name: `${DAY_LONG[ui.dayEdit]} workout`, items: [] };
     p.workouts[w.id] = w;
     p.days[ui.dayEdit] = { ...(p.days[ui.dayEdit] || {}), workout: w.id };
+    planToWeek(p, [ui.dayEdit]);
     save();
     ui.editFromDay = ui.dayEdit;
     go('workout', { id: w.id });
@@ -2060,6 +2082,8 @@ const A = {
     if (!confirm(`Delete ${w.name}? Everything you've logged is kept.`)) return;
     delete p.workouts[d.id];
     for (const k of DAYS) if (p.days[k]?.workout === d.id) p.days[k].workout = null;
+    const wk = weekDays(p);
+    if (wk) for (const k of DAYS) if (wk[k]?.workout === d.id) wk[k].workout = null;
     save();
     go('week');
   },
@@ -2559,6 +2583,7 @@ const SORT = {
     const p = cur();
     const a = DAYS[from], b = DAYS[to];
     [p.days[a], p.days[b]] = [p.days[b], p.days[a]];
+    planToWeek(p, [a, b]);
     toast(`${DAY_LONG[a]} and ${DAY_LONG[b]} swapped`);
   },
 };
