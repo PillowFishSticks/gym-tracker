@@ -109,6 +109,35 @@ export function nextTarget(cfg, step, t, done, missStreak = 0) {
   return out(t.weight, tr, 1, 'same', `Short ${short} rep${short > 1 ? 's' : ''}, same target`);
 }
 
+// ---------- set-by-set adjustment during a workout ----------
+// The next set's target, built from what the last set actually was rather than the plan.
+// cfg: { sets, min, max }  plan: { weight, sets: [reps per set] }  logs: sets done so far.
+// Keeps the plan's own set-to-set drop-off (e.g. 12 / 11 / 10), so beating or missing a set
+// carries forward instead of being ignored. Way under or over the range moves the weight one step.
+// Returns { reps, weight, why } — `why` is '' when it's just the plan.
+export function liveSet(cfg, plan, step, logs) {
+  const p = (i) => plan.sets[Math.min(i, plan.sets.length - 1)];
+  const i = logs.length;
+  if (!i) return { reps: p(0), weight: plan.weight, why: '' };
+  const prev = liveSet(cfg, plan, step, logs.slice(0, -1));
+  const last = logs[i - 1];
+  const shape = p(i) - p(i - 1); // planned drop from the last set to this one (0 or less)
+  const cap = last.weight ? cfg.max : Infinity; // bodyweight: no weight to add, so reps can keep climbing
+  const res = (reps, weight, why) => {
+    const r = { reps: clamp(reps, 1, cap), weight };
+    const same = r.reps === p(i) && weight === plan.weight;
+    return { ...r, why: same ? '' : why };
+  };
+  if (last.weight !== prev.weight) return res(last.reps + shape, last.weight, `Matched to your last set (${last.reps} × ${last.weight || 'BW'})`);
+  if (last.weight && last.reps <= Math.min(cfg.min, prev.reps) - 2) {
+    const w = Math.max(0, round(last.weight - step));
+    return res(cfg.min, w, `Last set was well under ${cfg.min} reps, −${step} kg`);
+  }
+  if (last.weight && last.reps >= Math.max(cfg.max, prev.reps) + 2) return res(cfg.min, round(last.weight + step), `Last set was well over ${cfg.max} reps, +${step} kg`);
+  const why = last.reps > prev.reps ? `Up from your last set (${last.reps} reps)` : last.reps < prev.reps ? `Adjusted to your last set (${last.reps} reps)` : 'Following your last set';
+  return res(last.reps + shape, last.weight, why);
+}
+
 // Estimated one-rep max (Epley) of the session's strongest set; reps alone for bodyweight.
 export function e1rm(sets) {
   return Math.max(...sets.map((s) => (s.weight ? s.weight * (1 + s.reps / 30) : s.reps)));

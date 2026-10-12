@@ -21,6 +21,8 @@ Each exercise has a rep range (e.g. 10–15) and a weight, and **every set has i
 - Had to **drop the weight** → next time starts from the lighter weight and builds back up.
 - Even your **first set** couldn't reach the bottom of the range → weight comes down one step.
 
+**During a workout, each set adjusts to the one before.** Get fewer reps than the target and the next set comes down to match; beat it and the next set goes up (never past the top of the range). The plan's own drop-off between sets is kept (e.g. 12 · 11 · 10). Change the weight and the next set follows that weight. Land well under the range (2+ reps below) and the next set drops one weight step; well over it and it goes up one step. The card says why it changed. Next week's target is still worked out from the whole session, as above.
+
 Exercises are remembered across programs, so adding "Leg press" to a new program picks up where you left off.
 
 ## Runs

@@ -174,6 +174,8 @@ function targetFor(exId, item) {
   return { weight: t.weight, sets, reps: sets[0] };
 }
 const setReps = (t, i) => t.sets[Math.min(i, t.sets.length - 1)];
+// During a workout: the next set's target, adjusted to how the sets so far actually went.
+const liveFor = (it, logs) => L.liveSet(it, targetFor(it.exId, it), exStep(it.exId), logs || []);
 // '12' or '12·11·10' for a stored target
 const tReps = (t) => L.repsText(t.sets && t.sets.length ? t.sets : [t.reps]);
 
@@ -496,8 +498,8 @@ function vTrain() {
   const a = S.active;
   const it = a.items[a.ex];
   if (!it) return `<div class="stack4"><h1>All done</h1><div class="sub">Nothing left in this workout.</div></div><button class="btn btn-primary" data-act="finishNow">Finish workout</button>`;
-  const t = targetFor(it.exId, it);
   const logs = a.logs[it.k] || [];
+  const t = liveFor(it, logs);
   const prev = exSessions(it.exId).at(-1);
   const bars = Array.from({ length: Math.max(it.sets, logs.length) }, (_, i) =>
     i < logs.length ? (logs[i].hit ? 'hit' : 'missed') : i === logs.length ? 'now' : '');
@@ -521,8 +523,9 @@ function vTrain() {
     <div class="setbars" aria-hidden="true">${bars.map((c) => `<span class="${c}"></span>`).join('')}</div>
     <div class="setcard">
       <div class="eyebrow">Set ${logs.length + 1} of ${it.sets}</div>
-      <div class="setnum"><span class="n">${setReps(t, logs.length)}</span><span class="x">×</span><span class="n">${fmtW(t.weight)}</span></div>
+      <div class="setnum"><span class="n">${t.reps}</span><span class="x">×</span><span class="n">${fmtW(t.weight)}</span></div>
       <div class="setlabels"><span>reps</span><span>${t.weight ? 'kg' : 'bodyweight'}</span></div>
+      ${t.why ? `<div class="small" style="margin-top:6px">${esc(t.why)}</div>` : ''}
       ${logs.length ? `<button class="linkbtn" data-act="editActive" data-k="${it.k}" style="margin-top:8px;color:var(--muted);font-weight:500">Done: ${esc(setsText(logs))} · <span class="lift">&nbsp;Edit</span></button>` : ''}
     </div>
     ${(() => {
@@ -750,9 +753,7 @@ function lastWeekSet(it, i) {
 function logAs(s) {
   const a = S.active;
   const it = a.items[a.ex];
-  const t = targetFor(it.exId, it);
-  const tr = setReps(t, (a.logs[it.k] || []).length);
-  logSet({ reps: s.reps, weight: s.weight, hit: s.reps >= tr && s.weight >= t.weight });
+  logSet({ reps: s.reps, weight: s.weight, hit: hitPlan(it, (a.logs[it.k] || []).length, s) });
 }
 
 // ---------- supersets ----------
@@ -794,6 +795,12 @@ function nextInSuperset(a, it) {
   return [...block.slice(pos + 1), ...block.slice(0, pos)].find((x) => !isDone(a, x)) || null;
 }
 
+// Set bars stay honest against the plan's own target for that set.
+function hitPlan(it, i, s) {
+  const t = targetFor(it.exId, it);
+  return s.reps >= setReps(t, i) && s.weight >= t.weight;
+}
+
 function logSet(set) {
   const a = S.active;
   const it = a.items[a.ex];
@@ -827,7 +834,7 @@ function sMissed() {
     <div class="stack4"><h2>What did you get?</h2><div class="sub">Target was ${m.t.reps} × ${fmtW(m.t.weight)}${m.t.weight ? ' kg' : ''}</div></div>
     <div class="stack"><div class="eyebrow">Reps</div>${stepper('mstep', 'reps', m.reps, 'reps', vsCls(m.reps, m.t.reps), 'miss')}</div>
     <div class="stack"><div class="eyebrow">Weight (kg)</div>${stepper('mstep', 'weight', m.weight, 'weight', vsCls(m.weight, m.t.weight), 'miss')}</div>
-    <div class="small">More or less than the target — next time's target is built from what you actually did.</div>
+    <div class="small">More or less than the target — your next set and next week's target adjust to what you actually did.</div>
     <button class="btn btn-primary" data-act="saveMissed">Save set</button>`;
 }
 
@@ -1057,6 +1064,7 @@ function sDayView() {
     <div class="stack4"><div class="eyebrow">${DAY_LONG[k]}</div><h2>${esc(w ? w.name : d.run ? RUN[d.run] : 'Rest')}</h2>${sub ? `<div class="sub">${esc(sub)}</div>` : ''}</div>
     ${w ? (w.items.length ? exList(w) : `<div class="empty">No exercises in ${esc(w.name)} yet.</div>`) : ''}
     ${w && w.items.length ? '<div class="small">Weights and reps are your next targets.</div>' : ''}
+    ${w ? `<button class="btn btn-ghost" data-act="editFromDay" data-id="${w.id}">Edit exercises</button>` : ''}
     <div class="grid2">
       <button class="btn btn-ghost" data-act="changeDay">Change day</button>
       <button class="btn btn-primary" data-act="closeSheet" style="height:52px;font-size:22px">Close</button>
@@ -1833,8 +1841,9 @@ const A = {
   },
   done() {
     const it = S.active.items[S.active.ex];
-    const t = targetFor(it.exId, it);
-    logSet({ reps: setReps(t, (S.active.logs[it.k] || []).length), weight: t.weight, hit: true });
+    const logs = S.active.logs[it.k] || [];
+    const t = liveFor(it, logs);
+    logSet({ reps: t.reps, weight: t.weight, hit: hitPlan(it, logs.length, t) });
   },
   sameWeek() {
     const a = S.active;
@@ -1849,9 +1858,9 @@ const A = {
   },
   missed() {
     const it = S.active.items[S.active.ex];
-    const full = targetFor(it.exId, it);
-    const t = { weight: full.weight, reps: setReps(full, (S.active.logs[it.k] || []).length) };
-    ui.miss = { reps: t.reps, weight: t.weight, step: exStep(it.exId), t };
+    const logs = S.active.logs[it.k] || [];
+    const t = liveFor(it, logs);
+    ui.miss = { reps: t.reps, weight: t.weight, step: exStep(it.exId), t, it, i: logs.length };
     openSheet(sMissed);
   },
   mstep(d) {
@@ -1863,7 +1872,7 @@ const A = {
   saveMissed() {
     const m = ui.miss;
     closeSheet();
-    logSet({ reps: m.reps, weight: m.weight, hit: m.reps >= m.t.reps && m.weight >= m.t.weight });
+    logSet({ reps: m.reps, weight: m.weight, hit: hitPlan(m.it, m.i, m) });
   },
   undo() {
     const a = S.active;
@@ -2095,6 +2104,7 @@ const A = {
   // Opened from a day's panel on the Plan tab: Back returns to that panel.
   editFromDay(d) {
     ui.editFromDay = ui.dayEdit;
+    ui.editFromSheet = ui.sheet === sDayView ? sDayView : sDay;
     go('workout', { id: d.id });
   },
   backFromWorkout() {
@@ -2105,7 +2115,7 @@ const A = {
     }
     const day = ui.editFromDay;
     ui.editFromDay = null;
-    if (day) ui.reopen = () => { ui.dayEdit = day; openSheet(sDay); };
+    if (day) { const sh = ui.editFromSheet || sDay; ui.reopen = () => { ui.dayEdit = day; openSheet(sh); }; }
     go('week');
   },
   delWorkout(d) {
