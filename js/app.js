@@ -497,7 +497,19 @@ function sPickDay() {
 function vTrain() {
   const a = S.active;
   const it = a.items[a.ex];
-  if (!it) return `<div class="stack4"><h1>All done</h1><div class="sub">Nothing left in this workout.</div></div><button class="btn btn-primary" data-act="finishNow">Finish workout</button>`;
+  if (!it) {
+    // Last set logged: pause here so there's a chance to add one more exercise before finishing.
+    const sets = Object.values(a.logs).reduce((n, l) => n + l.length, 0);
+    return `
+    <div class="spread" style="align-items:center">
+      <button class="iconbtn" data-act="undo" aria-label="Undo last set" ${a.hist.length ? '' : 'disabled'}>${I.undo}</button>
+      <button class="iconbtn" data-act="pickEx" aria-label="See today's exercises">${I.list}</button>
+    </div>
+    <div class="stack4"><h1>All done</h1><div class="sub">${sets} set${sets === 1 ? '' : 's'} logged. Fancy one more, or call it a day?</div></div>
+    <div class="grow"></div>
+    <button class="btn btn-ghost" data-act="addTodayForm">+ Add another exercise</button>
+    <button class="btn btn-primary" data-act="finishNow">Finish workout</button>`;
+  }
   const logs = a.logs[it.k] || [];
   const t = liveFor(it, logs);
   const prev = exSessions(it.exId).at(-1);
@@ -821,7 +833,6 @@ function logSet(set) {
   } else if (done(it)) {
     a.ex++;
   }
-  if (a.ex >= a.items.length) return finishWorkout();
   save();
   render(true);
 }
@@ -1902,7 +1913,6 @@ const A = {
         a.ex--;
       }
       if (i === a.ex && isDone(a, it)) a.ex++;
-      if (a.ex >= a.items.length) return finishWorkout();
     });
   },
   editSession(d) {
@@ -1981,7 +1991,6 @@ const A = {
     }
     normGroups(a.items);
     closeSheet();
-    if (a.ex >= a.items.length) return finishWorkout();
     save();
     render(true);
     toast(`${name} skipped today`);
