@@ -27,7 +27,7 @@ Each exercise has a rep range (e.g. 10–15) and a weight, and **every set has i
 
 **During a workout, each set adjusts to the one before.** Get fewer reps than the target and the next set comes down to match; beat it and the next set goes up (never past the top of the range). The plan's own drop-off between sets is kept (e.g. 12 · 11 · 10). Change the weight and the next set follows that weight. Land well under the range (2+ reps below) and the next set drops one weight step; well over it and it goes up one step, with reps worked out from that set's strength. The set bars go green whenever a set is at least as strong as planned, whatever mix of reps and weight. The card says why it changed. Next week's target is still worked out from the whole session, as above.
 
-Want one more set? Tap **Add a set, swap, skip or superset** → **+ Add a set**, or **+ One more set of …** straight after an exercise's last set.
+Want more or fewer sets today? Tap **Sets, swap, skip or superset** and use **Sets today − / +** (never below the sets you've already logged), or **+ One more set of …** straight after an exercise's last set. Dropping a set judges progress on the sets you did; extra sets are bonus work that never changes the target.
 
 **Each workout tracks its own lifts.** Hack squats in Tuesday's workout and in Thursday's are separate: each has its own target, its own "last time" and "same as last week", and progresses on its own. The first time a workout does an exercise it starts from that exercise's latest numbers from any workout. On **Progress → exercise**, the targets are listed per workout and the history can be switched between workouts. (The same workout put on two days shares one set of targets; make two workouts if the days should differ.)
 
@@ -56,7 +56,7 @@ Plain HTML, CSS and JavaScript — no build step. Run any static server in this 
 ## Fixing mistakes and changing order
 
 - **Busy machine?** During a workout tap the list icon (top right) and pick any exercise to do next. Sets already done are kept.
-- **Change things just for today:** during a workout tap **Add a set, swap, skip or superset** (or any exercise in the list) to swap it for another exercise, skip it (or stop early and keep the sets you did), take it out of a superset or superset it with something else. **+ Add an exercise for today** adds an extra. Your plan stays the same, and a swapped exercise keeps its own targets.
+- **Change things just for today:** during a workout tap **Sets, swap, skip or superset** (or any exercise in the list) to swap it for another exercise, skip it (or stop early and keep the sets you did), take it out of a superset or superset it with something else. **+ Add an exercise for today** adds an extra. Your plan stays the same, and a swapped exercise keeps its own targets.
 - **Change the plan mid-workout:** the list's **Change the plan for this workout** opens the workout editor. Anything you change there (sets, reps, new exercises, supersets) updates the workout you're doing straight away, keeping your logged sets and today's swaps and skips.
 - **Mistyped a set?** Tap "Done: …" on the set screen, or a finished exercise in the list, to change reps/weight or delete a set. Past sessions can be fixed from **Progress → exercise → Recent sessions**. Runs can be edited by tapping them.
 - **Supersets:** tap an exercise in a workout → **Superset with …** to link it to the next one (2 or 3+). During the workout their sets alternate: A, B, A, B…

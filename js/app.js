@@ -557,7 +557,7 @@ function vTrain() {
       <h1>${esc(exName(it.exId))}</h1>
       <div class="sub">Range ${it.min}–${it.max} reps · ${prev ? `last time ${esc(setsText(prev.sets))}` : 'first time'}</div>
       ${todayNote(it) ? `<div class="small">${esc(todayNote(it))}</div>` : ''}
-      <button class="linkbtn" data-act="exOpts" data-k="${it.k}" style="align-self:flex-start;padding:4px 0">Add a set, swap, skip or superset</button>
+      <button class="linkbtn" data-act="exOpts" data-k="${it.k}" style="align-self:flex-start;padding:4px 0">Sets, swap, skip or superset</button>
       ${(() => { const p = justDone(a, it); return p ? `<button class="linkbtn" data-act="moreSet" data-k="${p.k}" style="align-self:flex-start;padding:0;color:var(--muted);font-weight:500">+ One more set of ${esc(exName(p.exId))}</button>` : ''; })()}
     </div>
     <div class="setbars" aria-hidden="true">${bars.map((c) => `<span class="${c}"></span>`).join('')}</div>
@@ -700,7 +700,14 @@ function sExOpts() {
     ${i !== a.ex ? `<button class="btn btn-primary" data-act="jumpEx" data-i="${i}">Do this now</button>` : ''}
     <div class="eyebrow">Just for today</div>
     <div class="stack" style="gap:8px">
-      <button class="btn btn-ghost btn-small" data-act="moreSet" data-k="${it.k}">+ Add a set</button>
+      <div class="spread" style="align-items:center;background:var(--bg);border-radius:14px;padding:6px 6px 6px 14px">
+        <span style="font-size:16px;font-weight:600">Sets today${it.plan && it.plan !== it.sets ? ` <span class="small">(plan ${it.plan})</span>` : ''}</span>
+        <span class="hrow" style="gap:6px">
+          <button class="iconbtn" data-act="lessSet" data-k="${it.k}" aria-label="One set fewer" ${it.sets <= Math.max(1, n) ? 'disabled' : ''} style="font-size:24px">−</button>
+          <span class="cond" style="font-size:28px;min-width:28px;text-align:center">${it.sets}</span>
+          <button class="iconbtn" data-act="moreSet" data-k="${it.k}" data-stay="1" aria-label="One more set" style="font-size:24px">+</button>
+        </span>
+      </div>
       ${n ? '' : `<button class="btn btn-ghost btn-small" data-act="swapForm" data-k="${it.k}">Swap for another exercise</button>`}
       ${it.group ? `<button class="btn btn-ghost btn-small" data-act="ssOut" data-k="${it.k}">Take out of superset</button>` : ''}
       ${others.map((x) => `<button class="btn btn-ghost btn-small" data-act="ssWith" data-k="${it.k}" data-w="${x.k}" style="color:var(--lift)">${it.group ? 'Add' : 'Superset with'} ${esc(exName(x.exId))}${it.group ? ' to superset' : ''}</button>`).join('')}
@@ -891,7 +898,7 @@ function finishWorkout() {
     const sets = a.logs[it.k];
     // cfg.sets is the planned count: sets added on the day are extra work, not part of the target.
     const planned = it.plan || it.sets;
-    if (sets && sets.length) entries.push({ exId: it.exId, cfg: { sets: it.stop ? Math.min(sets.length, planned) : planned, min: it.min, max: it.max }, target: targetFor(it.exId, { ...it, sets: planned }, a.workoutId), sets });
+    if (sets && sets.length) entries.push({ exId: it.exId, cfg: { sets: Math.min(it.stop ? sets.length : it.sets, planned), min: it.min, max: it.max }, target: targetFor(it.exId, { ...it, sets: planned }, a.workoutId), sets });
   });
   S.active = null;
   wake(false);
@@ -2075,10 +2082,36 @@ const A = {
       a.ex--;
       a.items.splice(a.ex, 0, it);
     }
-    closeSheet();
     save();
+    if (d.stay) { render(); renderSheet(); return; }
+    closeSheet();
     render(true);
     toast(`Set ${it.sets} of ${exName(it.exId)} added for today`);
+  },
+  // One set fewer, just for today. Can't go below the sets already logged (or 1).
+  // If that finishes the exercise, the workout moves on as if its last set was just done.
+  lessSet(d) {
+    const a = S.active;
+    const it = activeItem(d.k);
+    if (!it) return;
+    const n = (a.logs[it.k] || []).length;
+    if (it.sets <= Math.max(1, n)) return;
+    it.plan = it.plan || it.sets;
+    it.sets--;
+    const i = a.items.indexOf(it);
+    if (i >= a.ex && isDone(a, it)) {
+      a.items.splice(i, 1);
+      a.items.splice(a.ex, 0, it);
+      a.ex++;
+      closeSheet();
+      save();
+      render(true);
+      toast(`${exName(it.exId)} done · ${n} set${n > 1 ? 's' : ''} today`);
+      return;
+    }
+    save();
+    render();
+    renderSheet();
   },
   swapForm(d) {
     ui.swap = { k: d.k };
