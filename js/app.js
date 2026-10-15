@@ -1549,6 +1549,9 @@ function vPrograms() {
       <div class="spread"><span style="font-size:20px;font-weight:600">${esc(p.name)}</span><span class="cond" style="font-size:22px">${esc(weekLabel(p))}</span></div>
       <div class="progress"><span style="width:${pct}%"></span></div>
       <div class="small">Started ${esc(L.fmtDate(p.startDate))} · ends ${esc(L.fmtDate(L.endOfProgram(p.startDate, p.weeks)))}. When it's done you'll be asked to start the next one, and this one moves to the Archive.</div>
+      ${wk !== 1 ? `<button class="btn btn-ghost btn-small" data-act="progWeek1">Make this week week 1</button>` : ''}
+      <label class="field">Week 1 started on<input class="input" type="date" data-change="progStart" value="${p.startDate}" max="${today()}"></label>
+      <div class="small" style="margin-top:-6px">Changing this only renumbers the weeks. Everything you've logged stays.</div>
       <button class="btn btn-ghost btn-small" data-act="endProgram">End early and archive</button>
     </div>`;
   } else {
@@ -2272,6 +2275,15 @@ const A = {
     render();
   },
 
+  // Renumber the weeks so this one is week 1. Logged workouts and runs aren't touched.
+  progWeek1() {
+    const p = cur();
+    if (!confirm(`Make this week week 1 of ${p.name}? Your logged sessions and targets stay as they are.`)) return;
+    p.startDate = today();
+    save();
+    render();
+    toast('This week is now week 1');
+  },
   endProgram() {
     const p = cur();
     if (!confirm(`End ${p.name} now and move it to the Archive? Everything you logged is kept.`)) return;
@@ -2506,6 +2518,14 @@ const INP = {
 };
 
 const CHG = {
+  progStart(el) {
+    const p = cur();
+    if (!p || !/^\d{4}-\d{2}-\d{2}$/.test(el.value)) return;
+    p.startDate = el.value;
+    save();
+    render();
+    toast(`Now ${weekLabel(p).toLowerCase()}`);
+  },
   wname(el) {
     const w = cur()?.workouts[el.dataset.id];
     if (!w) return;
