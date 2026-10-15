@@ -169,14 +169,26 @@ const exName = (id) => S.exercises[id]?.name || 'Exercise';
 const exStep = (id) => S.exercises[id]?.step ?? 2.5;
 
 // Next target for an exercise in a workout: weight plus a rep target per set.
-function targetFor(exId, item) {
-  const t = S.targets[exId] || { weight: 0, reps: item.min };
+// Targets and history are tracked per workout: hack squats in Tuesday's workout and in
+// Thursday's are separate lifts with their own targets. S.targets['<exId>@<workoutId>'] is that
+// workout's own target; S.targets['<exId>'] is the exercise's latest from any workout, used as
+// the starting point the first time a workout does it.
+const tKey = (exId, wid) => (wid ? `${exId}@${wid}` : exId);
+const getT = (exId, wid) => (wid && S.targets[tKey(exId, wid)]) || S.targets[exId] || null;
+function setT(exId, wid, t) {
+  if (wid) S.targets[tKey(exId, wid)] = t;
+  S.targets[exId] = { ...t };
+}
+const activeWid = () => S.active?.workoutId || null;
+
+function targetFor(exId, item, wid) {
+  const t = getT(exId, wid) || { weight: 0, reps: item.min };
   const sets = L.setTargets(t, item);
   return { weight: t.weight, sets, reps: sets[0] };
 }
 const setReps = (t, i) => t.sets[Math.min(i, t.sets.length - 1)];
 // During a workout: the next set's target, adjusted to how the sets so far actually went.
-const liveFor = (it, logs) => L.liveSet(it, targetFor(it.exId, it), exStep(it.exId), logs || []);
+const liveFor = (it, logs) => L.liveSet(it, targetFor(it.exId, it, activeWid()), exStep(it.exId), logs || []);
 // '12' or '12·11·10' for a stored target
 const tReps = (t) => L.repsText(t.sets && t.sets.length ? t.sets : [t.reps]);
 
@@ -186,10 +198,23 @@ function findExByName(name) {
 }
 
 // Every logged session of one exercise, oldest first.
-function exSessions(exId) {
+// Sessions of an exercise, oldest first; only those from workout `wid` when it's given.
+function exSessions(exId, wid) {
   const out = [];
-  for (const s of S.sessions) for (const e of s.entries) if (e.exId === exId) out.push({ id: s.id, date: s.date, programId: s.programId, sets: e.sets });
+  for (const s of S.sessions) {
+    if (wid && s.workoutId !== wid) continue;
+    for (const e of s.entries) if (e.exId === exId) out.push({ id: s.id, date: s.date, programId: s.programId, workoutId: s.workoutId, workoutName: s.workoutName, sets: e.sets });
+  }
   return out.sort((a, b) => a.date.localeCompare(b.date));
+}
+// Workouts are matched by name across programs (a new program copies them with new ids).
+const wNameOf = (wid) => S.programs.find((p) => p.workouts?.[wid])?.workouts[wid].name || '';
+const sameW = (s, wid, name) => s.workoutId === wid || (!!name && (s.workoutName || '').toLowerCase() === name.toLowerCase());
+// The last time this workout did the exercise (or any workout, if this one never has).
+function lastSession(exId, wid) {
+  const all = exSessions(exId);
+  const name = wid && wNameOf(wid);
+  return (wid && all.filter((s) => sameW(s, wid, name)).at(-1)) || all.at(-1) || null;
 }
 
 // Most recent sets/rep-range used for an exercise in any program.
@@ -431,7 +456,7 @@ function vToday() {
 function exList(w) {
   return `<div class="stack">${w.items
     .map((it, i) => {
-      const t = targetFor(it.exId, it);
+      const t = targetFor(it.exId, it, w.id);
       return `<div class="row exrow ${ssClass(w.items, i)}"><div><div class="name">${esc(exName(it.exId))}</div><div class="meta">${it.group ? '<span class="lift">Superset</span> · ' : ''}${it.sets} sets · ${it.min}–${it.max} reps</div></div>
         <div class="big">${L.repsText(t.sets)} × ${fmtW(t.weight)}${kgUnit(t.weight)}</div></div>`;
     })
@@ -478,8 +503,8 @@ function deleteSession(id) {
   if (!s) return;
   S.sessions = S.sessions.filter((x) => x !== s);
   for (const e of s.entries) {
-    const newer = S.sessions.some((x) => x.date >= s.date && x.entries.some((y) => y.exId === e.exId));
-    if (!newer && e.target) S.targets[e.exId] = { weight: e.target.weight, reps: e.target.reps, sets: e.target.sets, miss: 0 };
+    const newer = S.sessions.some((x) => x.date >= s.date && x.workoutId === s.workoutId && x.entries.some((y) => y.exId === e.exId));
+    if (!newer && e.target) setT(e.exId, s.workoutId, { weight: e.target.weight, reps: e.target.reps, sets: e.target.sets, miss: 0 });
   }
 }
 
@@ -514,7 +539,7 @@ function vTrain() {
   }
   const logs = a.logs[it.k] || [];
   const t = liveFor(it, logs);
-  const prev = exSessions(it.exId).at(-1);
+  const prev = lastSession(it.exId, a.workoutId);
   const bars = Array.from({ length: Math.max(it.sets, logs.length) }, (_, i) =>
     i < logs.length ? (logs[i].hit ? 'hit' : 'missed') : i === logs.length ? 'now' : '');
 
@@ -702,7 +727,7 @@ function exFields(d = {}) {
 }
 
 // Read exFields: finds or creates the exercise and sets its starting target if needed.
-function exFromForm(f) {
+function exFromForm(f, wid) {
   const name = f.exname.value.trim();
   if (!name) return null;
   const sets = int(f.sets.value, 1, 20, 3);
@@ -718,9 +743,9 @@ function exFromForm(f) {
   } else {
     ex.step = step;
   }
-  const t = S.targets[ex.id];
-  if (!t) S.targets[ex.id] = { weight: kg || 0, reps: min, sets: [min], miss: 0 };
-  else if (kg != null && kg !== t.weight) S.targets[ex.id] = { weight: kg, reps: min, sets: [min], miss: 0 };
+  const t = getT(ex.id, wid);
+  if (!t) setT(ex.id, wid, { weight: kg || 0, reps: min, sets: [min], miss: 0 });
+  else if (kg != null && kg !== t.weight) setT(ex.id, wid, { weight: kg, reps: min, sets: [min], miss: 0 });
   return { ex, sets, min, max, carried: known && !!t };
 }
 
@@ -765,7 +790,7 @@ function openSetEditor(title, sub, sets, step, onSave) {
 
 // What was done on set `i` the last time this exercise was done (its last set if it had fewer).
 function lastWeekSet(it, i) {
-  const prev = exSessions(it.exId).at(-1);
+  const prev = lastSession(it.exId, activeWid());
   if (!prev || !prev.sets.length) return null;
   return prev.sets[Math.min(i, prev.sets.length - 1)];
 }
@@ -819,7 +844,7 @@ function nextInSuperset(a, it) {
 // Set bars stay honest against the plan's own target for that set, judged on strength
 // so more reps at a lighter weight can still count (15 × 45 beats 10 × 50).
 function hitPlan(it, i, s) {
-  const t = targetFor(it.exId, it);
+  const t = targetFor(it.exId, it, activeWid());
   return L.beats(s, t.weight, setReps(t, i));
 }
 
@@ -866,7 +891,7 @@ function finishWorkout() {
     const sets = a.logs[it.k];
     // cfg.sets is the planned count: sets added on the day are extra work, not part of the target.
     const planned = it.plan || it.sets;
-    if (sets && sets.length) entries.push({ exId: it.exId, cfg: { sets: it.stop ? Math.min(sets.length, planned) : planned, min: it.min, max: it.max }, target: targetFor(it.exId, { ...it, sets: planned }), sets });
+    if (sets && sets.length) entries.push({ exId: it.exId, cfg: { sets: it.stop ? Math.min(sets.length, planned) : planned, min: it.min, max: it.max }, target: targetFor(it.exId, { ...it, sets: planned }, a.workoutId), sets });
   });
   S.active = null;
   wake(false);
@@ -877,15 +902,15 @@ function finishWorkout() {
     return;
   }
   const items = entries.map((e) => {
-    const prev = S.targets[e.exId] || {};
+    const prev = getT(e.exId, a.workoutId) || {};
     const nx = L.nextTarget(e.cfg, exStep(e.exId), e.target, e.sets, prev.miss || 0);
-    S.targets[e.exId] = { weight: nx.weight, reps: nx.reps, sets: nx.sets, miss: nx.miss };
+    setT(e.exId, a.workoutId, { weight: nx.weight, reps: nx.reps, sets: nx.sets, miss: nx.miss });
     return { exId: e.exId, dir: nx.dir, why: nx.why };
   });
   const minutes = Math.max(1, Math.round((Date.now() - a.started) / 60000));
   S.sessions.push({ id: uid(), date: a.date, programId: a.programId, workoutId: a.workoutId, workoutName: a.workoutName, minutes, entries });
   ui.day = null; // back on Today, everything done today is listed together
-  S.lastSummary = { name: a.workoutName, sets: entries.reduce((n, e) => n + e.sets.length, 0), minutes, items };
+  S.lastSummary = { name: a.workoutName, wid: a.workoutId, sets: entries.reduce((n, e) => n + e.sets.length, 0), minutes, items };
   save();
   go('summary');
 }
@@ -902,9 +927,9 @@ function vSummary() {
     <div class="eyebrow">Next time</div>
     <div class="stack">${s.items
       .map((x) => {
-        const t = S.targets[x.exId] || { reps: 0, weight: 0 };
+        const t = getT(x.exId, s.wid) || { reps: 0, weight: 0 };
         const cls = dirCls(x.dir); // progress green, setbacks orange, holds grey
-        return `<button class="row" data-act="editTarget" data-ex="${x.exId}">
+        return `<button class="row" data-act="editTarget" data-ex="${x.exId}" data-wid="${s.wid || ''}">
           <div><div class="name">${esc(exName(x.exId))}</div><div class="meta ${cls}">${esc(x.why)}</div></div>
           <div class="hrow"><span class="big">${tReps(t)} × ${fmtW(t.weight)}</span>${arrow(x.dir)}</div></button>`;
       })
@@ -1163,7 +1188,7 @@ function vWorkout(params) {
     ${w.items.length > 1 ? '<div class="small" style="margin-bottom:-8px">Drag ⠿ to reorder · tap to edit</div>' : ''}
     <div class="stack" data-sortable="ex" data-wid="${w.id}">${w.items.length
       ? w.items.map((it, i) => {
-          const t = targetFor(it.exId, it);
+          const t = targetFor(it.exId, it, w.id);
           return `<button class="row ${ssClass(w.items, i)}" data-idx="${i}" data-act="itemSheet" data-wid="${w.id}" data-i="${i}">
             ${w.items.length > 1 ? `<span class="handle" data-handle aria-label="Drag to reorder">${I.grip}</span>` : ''}
             <span class="grow"><span class="name">${esc(exName(it.exId))}</span>${it.group ? '<span class="sslabel">Superset</span>' : ''}</span>
@@ -1183,7 +1208,7 @@ function sItem() {
   const w = p.workouts[ui.item.wid];
   const it = w.items[ui.item.i];
   const ex = S.exercises[it.exId];
-  const t = targetFor(it.exId, it);
+  const t = targetFor(it.exId, it, ui.item.wid);
   const last = ui.item.i === w.items.length - 1;
   return `
     <h2>${esc(ex.name)}</h2>
@@ -1317,8 +1342,13 @@ const dirCls = (dir) => (dir === 'up' ? 'lift' : dir === 'down' ? 'missc' : '');
 // (e.g. 6 × 50 → 14 × 47.5 is up). Under 1% either way counts as no change.
 // A weight increase still counts as up after the usual rep reset (15 × 40 → 10 × 42.5),
 // unless the estimate fell by more than 8%.
-function liftChange(ss) {
-  if (ss.length < 2) return null;
+// Only sessions of the same workout are compared (a heavy Tuesday and a lighter Thursday
+// aren't progress or regress against each other): the workout done most recently wins.
+function liftChange(all) {
+  const by = {};
+  all.forEach((s) => { const k = (s.workoutName || '').toLowerCase(); (by[k] = by[k] || []).push(s); });
+  const ss = Object.values(by).filter((g) => g.length >= 2).sort((a, b) => b.at(-1).date.localeCompare(a.at(-1).date))[0];
+  if (!ss) return null;
   const a = L.bestSet(ss[0].sets), b = L.bestSet(ss.at(-1).sets);
   const ea = L.e1rm(ss[0].sets), eb = L.e1rm(ss.at(-1).sets);
   let dir = Math.abs(eb - ea) < ea * 0.01 ? 'same' : eb > ea ? 'up' : 'down';
@@ -1471,17 +1501,45 @@ function yearAgo(list, pick) {
   return old ? pick(old) : null;
 }
 
+// Workouts in the current program that include an exercise, with the days they're on.
+function workoutsWith(exId) {
+  const p = cur();
+  if (!p) return [];
+  return Object.values(p.workouts)
+    .filter((w) => w.items.some((it) => it.exId === exId))
+    .map((w) => ({ w, days: DAYS.filter((k) => p.days[k]?.workout === w.id).map((k) => DAY_LONG[k].slice(0, 3)) }));
+}
+
 function vExercise(params) {
   const ex = S.exercises[params.id];
   if (!ex) return vProgress();
-  const all = exSessions(ex.id);
-  const t = S.targets[ex.id];
   let h = `<div class="hrow">${backBtn()}</div><h1>${esc(ex.name)}</h1>`;
-  if (t) {
-    h += `<div class="card"><div class="eyebrow">Next target</div>
-      <div class="spread" style="align-items:center"><span class="cond" style="font-size:40px">${tReps(t)} × ${fmtW(t.weight)}${kgUnit(t.weight)}</span>
-      <button class="linkbtn" data-act="editTarget" data-ex="${ex.id}">Change</button></div></div>`;
+  // Each workout has its own target.
+  const ws = workoutsWith(ex.id);
+  const tline = (t, wid, label) => `<div class="spread" style="align-items:center">
+      <span class="stack4" style="gap:0">${label ? `<span class="small">${label}</span>` : ''}<span class="cond" style="font-size:${label ? 30 : 40}px">${tReps(t)} × ${fmtW(t.weight)}${kgUnit(t.weight)}</span></span>
+      <button class="linkbtn" data-act="editTarget" data-ex="${ex.id}" data-wid="${wid || ''}">Change</button></div>`;
+  if (ws.length) {
+    h += `<div class="card"><div class="eyebrow">Next target${ws.length > 1 ? 's' : ''}</div>${ws.map(({ w, days }) => {
+      const t = getT(ex.id, w.id);
+      return t ? tline(t, w.id, ws.length > 1 ? esc(w.name + (days.length ? ' · ' + days.join(', ') : '')) : '') : '';
+    }).join('')}</div>`;
+  } else if (S.targets[ex.id]) {
+    h += `<div class="card"><div class="eyebrow">Next target</div>${tline(S.targets[ex.id], null, '')}</div>`;
   }
+  // Split the history by workout when it's done in more than one.
+  // (grouped by workout name, so the same workout in an older program counts too)
+  const every = exSessions(ex.id);
+  const wk = (s) => (s.workoutName || 'Workout').toLowerCase();
+  const names = [...new Set(every.map(wk))];
+  const pick = names.includes(ui.exW?.[ex.id]) ? ui.exW[ex.id] : names.length > 1 ? wk(every.at(-1)) : null;
+  if (names.length > 1) {
+    h += `<div class="seg" role="group" aria-label="Workout">${names.map((n) => {
+      const label = every.filter((s) => wk(s) === n).at(-1).workoutName || 'Workout';
+      return `<button data-act="exW" data-ex="${ex.id}" data-v="${esc(n)}" aria-pressed="${n === pick}">${esc(label)}</button>`;
+    }).join('')}</div>`;
+  }
+  const all = pick ? every.filter((s) => wk(s) === pick) : every;
   if (!all.length) return h + '<div class="empty">No sets logged yet.</div>';
 
   h += rangeSeg();
@@ -1636,10 +1694,19 @@ function createProgram() {
       if (np.runs && d.run) nd.run = d.run;
       if (nd.workout || nd.run) days[k] = nd;
     }
+    // The copied workouts carry on each old workout's own targets.
+    for (const [oldId, newId] of Object.entries(idMap)) {
+      for (const it of workouts[newId].items) {
+        const t = S.targets[tKey(it.exId, oldId)];
+        if (t) S.targets[tKey(it.exId, newId)] = { ...t };
+      }
+    }
     if (!np.keep) {
       for (const w of Object.values(workouts)) for (const it of w.items) {
-        const t = S.targets[it.exId];
-        if (t) Object.assign(t, { reps: it.min, sets: [it.min], miss: 0 });
+        for (const key of [it.exId, tKey(it.exId, w.id)]) {
+          const t = S.targets[key];
+          if (t) S.targets[key] = { ...t, reps: it.min, sets: [it.min], miss: 0 };
+        }
       }
     }
   }
@@ -1916,7 +1983,7 @@ const A = {
   editActive(d) {
     const a = S.active;
     const it = a.items.find((x) => String(x.k) === d.k);
-    const t = targetFor(it.exId, it);
+    const t = targetFor(it.exId, it, a.workoutId);
     openSetEditor(exName(it.exId), `Target ${L.repsText(t.sets)} × ${fmtW(t.weight)}${t.weight ? ' kg' : ''}`, a.logs[it.k] || [], exStep(it.exId), (sets) => {
       a.logs[it.k] = sets.map((s, i) => ({ ...s, hit: L.beats(s, t.weight, setReps(t, i)) }));
       a.hist = a.hist.filter((k) => k !== it.k).concat(sets.map(() => it.k));
@@ -1942,10 +2009,10 @@ const A = {
       else {
         // Deleting every set = it was never done. If this was its latest session,
         // put next time's target back to what it was before, as if it was skipped.
-        const latest = exSessions(e.exId).at(-1);
+        const latest = exSessions(e.exId, s.workoutId).at(-1);
         s.entries = s.entries.filter((x) => x !== e);
         if (latest && latest.id === s.id && e.target) {
-          S.targets[e.exId] = { weight: e.target.weight, reps: e.target.reps, sets: e.target.sets, miss: 0 };
+          setT(e.exId, s.workoutId, { weight: e.target.weight, reps: e.target.reps, sets: e.target.sets, miss: 0 });
         }
       }
       if (!s.entries.length) S.sessions = S.sessions.filter((x) => x !== s);
@@ -2103,9 +2170,13 @@ const A = {
     if (confirm('Finish the workout now? Sets you logged are saved and next time’s targets are worked out.')) finishWorkout();
   },
 
+  exW(d) {
+    ui.exW = { ...(ui.exW || {}), [d.ex]: d.v };
+    render();
+  },
   editTarget(d) {
-    const t = S.targets[d.ex] || { weight: 0, reps: 10 };
-    ui.tgt = { exId: d.ex, reps: (t.sets && t.sets[0]) || t.reps, weight: t.weight, step: exStep(d.ex) };
+    const t = getT(d.ex, d.wid) || { weight: 0, reps: 10 };
+    ui.tgt = { exId: d.ex, wid: d.wid || null, reps: (t.sets && t.sets[0]) || t.reps, weight: t.weight, step: exStep(d.ex) };
     openSheet(sTarget);
   },
   tstep(d) {
@@ -2116,7 +2187,7 @@ const A = {
   },
   saveTarget() {
     const t = ui.tgt;
-    S.targets[t.exId] = { weight: t.weight, reps: t.reps, sets: [t.reps], miss: 0 };
+    setT(t.exId, t.wid, { weight: t.weight, reps: t.reps, sets: [t.reps], miss: 0 });
     save();
     closeSheet();
     render();
@@ -2612,7 +2683,7 @@ const SUB = {
   },
   addEx(form) {
     const w = cur().workouts[form.dataset.id];
-    const r = exFromForm(form.elements);
+    const r = exFromForm(form.elements, w.id);
     if (!r) return;
     w.items.push({ exId: r.ex.id, sets: r.sets, min: r.min, max: r.max });
     save();
@@ -2622,7 +2693,7 @@ const SUB = {
   swapEx(form) {
     const a = S.active;
     const it = activeItem(ui.swap.k);
-    const r = it && exFromForm(form.elements);
+    const r = it && exFromForm(form.elements, a.workoutId);
     if (!r) return;
     const was = exName(it.exId);
     if (r.ex.id !== it.exId) {
@@ -2638,7 +2709,7 @@ const SUB = {
   },
   addToday(form) {
     const a = S.active;
-    const r = exFromForm(form.elements);
+    const r = exFromForm(form.elements, a.workoutId);
     if (!r) return;
     a.items.push({ exId: r.ex.id, sets: r.sets, min: r.min, max: r.max, k: nextK(a), today: true });
     save();
@@ -2659,12 +2730,12 @@ const SUB = {
     it.sets = int(f.sets.value, 1, 20, it.sets);
     it.min = int(f.min.value, 1, 100, it.min);
     it.max = Math.max(it.min, int(f.max.value, 1, 100, it.max));
-    const old = S.targets[it.exId] || {};
+    const old = getT(it.exId, ui.item.wid) || {};
     const weight = num(f.kg.value) ?? old.weight ?? 0;
     const reps = int(f.reps.value, 1, 100, it.min);
     const oldFirst = (old.sets && old.sets[0]) || old.reps;
-    if (reps !== oldFirst) S.targets[it.exId] = { weight, reps, sets: [reps], miss: 0 };
-    else if (weight !== old.weight) S.targets[it.exId] = { ...old, weight, miss: 0 };
+    if (reps !== oldFirst) setT(it.exId, ui.item.wid, { weight, reps, sets: [reps], miss: 0 });
+    else if (weight !== old.weight) setT(it.exId, ui.item.wid, { ...old, weight, miss: 0 });
     save();
     closeSheet();
     render();
@@ -2804,18 +2875,18 @@ if ('serviceWorker' in navigator) {
 // One-off data fixes, run on open and after loading the sheet's copy. Each one only acts if its
 // exact problem is still there, so it's safe to run again and again.
 function applyFixes() {
+  let changed = seedWorkoutTargets();
   if (S.demo) return;
-  let changed = false;
   // 15 Oct 2026: wrist curls were logged as 0 reps on every set — they should have been skipped.
   const DAY = '2026-10-15';
   const isWrist = (id) => /wrist\s*curl/i.test(S.exercises[id]?.name || '');
   const allZero = (sets) => sets.length > 0 && sets.every((x) => !Number(x.reps));
   for (const s of S.sessions.filter((x) => x.date === DAY)) {
     for (const e of s.entries.filter((x) => isWrist(x.exId) && allZero(x.sets))) {
-      const latest = exSessions(e.exId).at(-1);
+      const latest = exSessions(e.exId, s.workoutId).at(-1);
       s.entries = s.entries.filter((x) => x !== e);
       if (latest && latest.id === s.id && e.target) {
-        S.targets[e.exId] = { weight: e.target.weight, reps: e.target.reps, sets: e.target.sets, miss: 0 };
+        setT(e.exId, s.workoutId, { weight: e.target.weight, reps: e.target.reps, sets: e.target.sets, miss: 0 });
       }
       changed = true;
     }
@@ -2835,6 +2906,34 @@ function applyFixes() {
     }
   }
   if (changed) save();
+}
+
+// 15 Oct 2026: targets moved from one per exercise to one per workout. A workout that has
+// done the exercise before gets its own target, worked out from its own last session (or the
+// current one, if that workout was the last to do it). Runs every load; does nothing once set.
+function seedWorkoutTargets() {
+  const p = cur();
+  if (!p) return false;
+  let changed = false;
+  for (const w of Object.values(p.workouts)) {
+    for (const it of w.items) {
+      const key = tKey(it.exId, w.id);
+      if (S.targets[key]) continue;
+      const mine = exSessions(it.exId, w.id).at(-1);
+      if (!mine) continue;
+      const lastAny = exSessions(it.exId).at(-1);
+      if (lastAny && lastAny.id === mine.id && S.targets[it.exId]) {
+        S.targets[key] = { ...S.targets[it.exId] };
+      } else {
+        const e = S.sessions.find((x) => x.id === mine.id)?.entries.find((x) => x.exId === it.exId);
+        if (!e || !e.target || !e.cfg) continue;
+        const nx = L.nextTarget(e.cfg, exStep(it.exId), e.target, e.sets, 0);
+        S.targets[key] = { weight: nx.weight, reps: nx.reps, sets: nx.sets, miss: 0 };
+      }
+      changed = true;
+    }
+  }
+  return changed;
 }
 
 applyFixes();

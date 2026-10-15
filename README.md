@@ -29,6 +29,8 @@ Each exercise has a rep range (e.g. 10–15) and a weight, and **every set has i
 
 Want one more set? Tap **Add a set, swap, skip or superset** → **+ Add a set**, or **+ One more set of …** straight after an exercise's last set.
 
+**Each workout tracks its own lifts.** Hack squats in Tuesday's workout and in Thursday's are separate: each has its own target, its own "last time" and "same as last week", and progresses on its own. The first time a workout does an exercise it starts from that exercise's latest numbers from any workout. On **Progress → exercise**, the targets are listed per workout and the history can be switched between workouts. (The same workout put on two days shares one set of targets; make two workouts if the days should differ.)
+
 Exercises are remembered across programs, so adding "Leg press" to a new program picks up where you left off.
 
 ## Runs

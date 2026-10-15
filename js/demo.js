@@ -105,7 +105,8 @@ export function buildDemo() {
           const wo = workouts[d.workout];
           const entries = wo.items.map((it) => {
             const ex = S.exercises[it.exId];
-            const tRaw = S.targets[it.exId];
+            const key = `${it.exId}@${wo.id}`; // targets are per workout
+            const tRaw = S.targets[key] || S.targets[it.exId];
             const tr = L.setTargets(tRaw, it);
             const t = { weight: tRaw.weight, reps: tr[0], sets: tr };
             const sets = [];
@@ -118,7 +119,8 @@ export function buildDemo() {
               sets.push({ reps, weight: t.weight, hit: reps >= tr[i] });
             }
             const nx = L.nextTarget({ sets: it.sets, min: it.min, max: it.max }, ex.step, t, sets, tRaw.miss || 0);
-            S.targets[it.exId] = { weight: nx.weight, reps: nx.reps, sets: nx.sets, miss: nx.miss };
+            S.targets[key] = { weight: nx.weight, reps: nx.reps, sets: nx.sets, miss: nx.miss };
+            S.targets[it.exId] = { ...S.targets[key] };
             return { exId: it.exId, cfg: { sets: it.sets, min: it.min, max: it.max }, target: t, sets };
           });
           S.sessions.push({ id: id('s'), date, programId: prog.id, workoutId: wo.id, workoutName: wo.name, minutes: 45 + Math.round(rand() * 25), entries });

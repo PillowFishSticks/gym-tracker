@@ -112,13 +112,22 @@ function writeReadable(ss, st) {
     runs.push([r.date, RUN_NAMES[r.type] || r.type, r.distKm, "'" + duration(r.timeSec), "'" + duration(r.timeSec / r.distKm)]);
   });
 
-  const targets = [['Exercise', 'Next weight (kg)', 'Next reps per set']];
+  // Targets are kept per workout ('<exId>@<workoutId>'); a bare '<exId>' is just the latest
+  // from any workout, so only the current program's per-workout ones are listed.
+  const cur = (st.programs || []).find((p) => p.id === st.currentId);
+  const wName = (wid) => (cur && cur.workouts[wid] ? cur.workouts[wid].name : null);
+  const targets = [['Exercise', 'Workout', 'Next weight (kg)', 'Next reps per set']];
   Object.keys(st.targets || {})
-    .map((id) => [exName(id), st.targets[id]])
-    .sort((a, b) => (a[0] < b[0] ? -1 : 1))
-    .forEach(([name, t]) => {
+    .map((key) => {
+      const [id, wid] = key.split('@');
+      return wid ? (wName(wid) ? [exName(id), wName(wid), st.targets[key]] : null) : [exName(id), '', st.targets[key]];
+    })
+    .filter(Boolean)
+    .filter((r, i, all) => r[1] || !all.some((x) => x[1] && x[0] === r[0]))
+    .sort((a, b) => (a[0] + a[1] < b[0] + b[1] ? -1 : 1))
+    .forEach(([name, w, t]) => {
       const sets = t.sets && t.sets.length ? t.sets : [t.reps];
-      targets.push([name, t.weight, "'" + sets.join(' / ')]);
+      targets.push([name, w, t.weight, "'" + sets.join(' / ')]);
     });
 
   fill(ss.getSheetByName('Workouts'), workouts);
