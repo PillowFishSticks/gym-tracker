@@ -1921,9 +1921,17 @@ const A = {
     if (!e) return;
     openSetEditor(exName(e.exId), `${s.workoutName} · ${L.fmtDate(s.date, { weekday: 'short', year: 'numeric' })}`, e.sets, exStep(e.exId), (sets) => {
       if (sets.length) e.sets = sets.map((x, i) => ({ ...x, hit: x.reps >= L.setTargets(e.target, e.cfg)[i] && x.weight >= e.target.weight }));
-      else s.entries = s.entries.filter((x) => x !== e);
+      else {
+        // Deleting every set = it was never done. If this was its latest session,
+        // put next time's target back to what it was before, as if it was skipped.
+        const latest = exSessions(e.exId).at(-1);
+        s.entries = s.entries.filter((x) => x !== e);
+        if (latest && latest.id === s.id && e.target) {
+          S.targets[e.exId] = { weight: e.target.weight, reps: e.target.reps, sets: e.target.sets, miss: 0 };
+        }
+      }
       if (!s.entries.length) S.sessions = S.sessions.filter((x) => x !== s);
-      toast('Saved · next target unchanged (tap Change to adjust)');
+      toast(sets.length ? 'Saved · next target unchanged (tap Change to adjust)' : 'Removed · treated as skipped');
     });
   },
   esStep(d) {
