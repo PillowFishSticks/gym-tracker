@@ -27,6 +27,9 @@ html, body {
   font-family: 'Barlow', system-ui, sans-serif;
   -webkit-tap-highlight-color: transparent;
   -webkit-text-size-adjust: 100%;
+  /* Nothing should ever scroll sideways; clip stops stray overflow without breaking fixed/sticky bits */
+  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 button, input, select { font: inherit; color: inherit; }
@@ -180,6 +183,10 @@ h2 { margin: 0; font-family: var(--cond); font-size: 30px; line-height: 1.05; fo
 .input.num { text-align: center; font-family: var(--cond); font-size: 24px; font-weight: 700; padding: 0 4px; }
 .card .input { background: var(--bg); }
 select.input { appearance: none; -webkit-appearance: none; }
+/* iOS Safari gives date inputs a fixed minimum width that ignores width:100%,
+   which pushed the Run page wider than the screen and let it slide sideways. */
+input[type="date"].input { -webkit-appearance: none; appearance: none; min-width: 0; max-width: 100%; display: block; line-height: 50px; }
+input[type="date"].input::-webkit-date-and-time-value { text-align: left; margin: 0; }
 .bigfield { display: flex; flex-direction: column; gap: 6px; background: var(--card); border-radius: 18px; padding: 14px 16px; font-size: 13px; font-weight: 600; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
 .bigfield input { border: none; background: transparent; color: var(--text); padding: 0; width: 100%; font-family: var(--cond); font-size: 46px; font-weight: 700; letter-spacing: 0; }
 .bigfield input:focus { outline: none; }
