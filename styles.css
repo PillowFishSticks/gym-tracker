@@ -274,6 +274,12 @@ input[type="date"].input::-webkit-date-and-time-value { text-align: left; margin
 }
 .sheet .input, .sheet .stepper { background: var(--bg); }
 .sheet .row { background: var(--bg); }
+/* Buttons that stay pinned to the bottom of a long sheet while it scrolls */
+.sheetbar {
+  position: sticky; bottom: calc(-1 * (env(safe-area-inset-bottom) + 24px)); z-index: 2;
+  margin: 0 -20px calc(-1 * (env(safe-area-inset-bottom) + 24px)); padding: 12px 20px calc(env(safe-area-inset-bottom) + 24px);
+  background: var(--card); border-top: 1px solid var(--line2);
+}
 .grab { width: 44px; height: 5px; border-radius: 3px; background: #3A3E45; align-self: center; }
 .toast {
   position: fixed; left: 50%; top: calc(env(safe-area-inset-top) + 14px); transform: translateX(-50%);

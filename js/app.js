@@ -473,7 +473,7 @@ function sessionCard(s, from = '') {
   const edit = s.date >= weekMonday();
   return `<div class="card done">
       <div class="hrow lift" style="gap:8px"><span>${tickIcon()}</span><span class="cond grow" style="font-size:26px">${esc(s.workoutName)} complete</span>
-        ${edit ? `<button class="iconbtn delbtn" data-act="editWorkout" data-id="${s.id}" data-from="${from}" aria-label="Edit ${esc(s.workoutName)}" style="margin-right:0">${svg('<path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/>', 20)}</button>` : ''}
+        ${edit ? `<button class="iconbtn delbtn" data-act="editWorkout" data-id="${s.id}" data-from="${from}" aria-label="Edit ${esc(s.workoutName)}" style="margin-right:-14px">${svg('<path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/>', 20)}</button>` : ''}
         <button class="iconbtn delbtn" data-act="askDelSession" data-id="${s.id}" aria-label="Delete ${esc(s.workoutName)}">${I.bin}</button></div>
       <div class="small">Done ${doneWhen(s.date)} · ${sets} sets · ${s.minutes} min</div>
       <div class="stack4">${s.entries.map((e) => `<div class="line-item" style="padding:9px 0;min-height:0"><span>${esc(exName(e.exId))}</span><span class="muted">${esc(setsText(e.sets))}</span></div>`).join('')}</div>
@@ -840,8 +840,10 @@ function sEditWorkout() {
         ${x.sets.length ? '' : '<div class="small missc">No sets: saving removes it from this workout, as if skipped.</div>'}
         <button class="linkbtn" data-act="wsAdd" data-e="${e}" style="align-self:flex-start;padding:4px 0">+ Add a set</button>
       </div>`).join('<div style="border-top:1px solid var(--line2)"></div>')}
-    <button class="btn btn-primary" data-act="wsSave">Save changes</button>
-    <button class="btn btn-ghost btn-small" data-act="wsCancel">Cancel</button>`;
+    <div class="sheetbar grid2">
+      <button class="btn btn-ghost" data-act="wsCancel">Cancel</button>
+      <button class="btn btn-primary" data-act="wsSave" style="height:52px;font-size:22px">Save</button>
+    </div>`;
 }
 
 function openSetEditor(title, sub, sets, step, onSave, after) {
