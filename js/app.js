@@ -396,11 +396,24 @@ function vToday() {
         <button class="btn btn-primary" data-act="go" data-to="newprogram">Start next program</button>
       </div>`;
   }
-  if (S.active) h += `<button class="btn btn-primary" data-act="go" data-to="train">Resume workout</button>`;
-
   const ws = weekStatus(p);
   const liftDone = ws.slots.find((s) => s.day === key && s.kind === 'lift' && s.doneOn);
   const runDone = ws.slots.find((s) => s.day === key && s.kind === 'run' && s.doneOn);
+
+  // Another day of this week with everything planned already done: just show what was done.
+  // (Today always keeps its buttons, in case another workout gets added.)
+  if (notToday && (w || d.run) && (!w || liftDone) && (!d.run || runDone)) {
+    const date = L.addDays(ws.mon, DAYS.indexOf(key));
+    const ss = S.sessions.filter((s) => s.date === date);
+    if (liftDone && !ss.includes(liftDone.ref)) ss.unshift(liftDone.ref);
+    const rs = S.runs.filter((r) => r.date === date);
+    if (runDone && !rs.includes(runDone.ref)) rs.unshift(runDone.ref);
+    const back = `<button class="backtoday" data-act="cancelDay">${I.close} Cancel</button>`;
+    return h.replace(back, `<button class="backtoday" data-act="cancelDay">${I.back} Today</button>`).replace(' (picked)', '')
+      + ss.map((s) => sessionCard(s)).join('') + rs.map(runCard).join('');
+  }
+
+  if (S.active) h += `<button class="btn btn-primary" data-act="go" data-to="train">Resume workout</button>`;
   // Everything finished today stays on screen, whichever day it was planned for,
   // so doing another day's workout or a run adds to the list instead of replacing it.
   h += S.sessions.filter((s) => s.date === today()).map(sessionCard).join('');
