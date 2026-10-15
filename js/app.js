@@ -1125,15 +1125,8 @@ function slotTag(s) {
 // Opened from Today: this week's days, what's done, and this-week-only changes.
 function sThisWeek() {
   const p = cur();
-  const mon = weekMonday();
-  const ss = S.sessions.filter((x) => x.date >= mon).sort((a, b) => b.date.localeCompare(a.date));
-  const rs = S.runs.filter((x) => x.date >= mon).sort((a, b) => b.date.localeCompare(a.date));
-  const done = ss.length || rs.length ? `
-    <div class="stack"><div class="eyebrow">Done this week · ✎ to fix a mistake</div>
-      ${ss.map((x) => sessionCard(x, 'week')).join('')}
-      ${rs.length ? `<div class="stack4">${rs.map(runLine).join('')}</div>` : ''}
-    </div>` : '';
-  return `<h2>This week</h2>` + vThisWeek(p) + done + `<button class="btn btn-ghost" data-act="closeSheet">Close</button>`;
+  return `<h2>This week</h2>` + vThisWeek(p) + `
+    <div class="sheetbar"><button class="btn btn-ghost" data-act="closeSheet">Close</button></div>`;
 }
 
 function vThisWeek(p) {
@@ -1154,7 +1147,7 @@ function vThisWeek(p) {
         ${tags ? `<span class="tags">${tags}</span>` : '<span class="small grow">Rest</span>'}
         ${past ? '' : `<span class="handle" data-handle aria-label="Drag onto another day to swap them this week">${I.grip}</span>`}</button>`;
     }).join('')}</div>
-    <div class="small">Tap a coming day to change it, or drag ⠿ onto another day to swap — this week only, your plan stays the same. Any workout done on any day still ticks off its slot.</div>`;
+    <div class="small">Tap a done day to see or fix it. Tap a coming day to change it, or drag ⠿ onto another day to swap — this week only, your plan stays the same. Any workout done on any day still ticks off its slot.</div>`;
 }
 
 // Change one coming day for this week only.
