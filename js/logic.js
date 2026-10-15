@@ -68,45 +68,93 @@ function bumpLowest(arr, max) {
   return a;
 }
 
-// Double progression, judged on the session as a whole.
+// ---------- strength: one score for any weight × reps ----------
+// Epley estimate of a one-rep max. It's reliable up to roughly 12–15 reps, so reps past
+// REP_CAP don't add any more (a 25-rep set can't claim a huge estimate). Bodyweight: reps.
+export const REP_CAP = 15;
+// (`cap` is raised for exercises whose own rep range goes higher, e.g. 12–20 flys.)
+export const strength = (weight, reps, cap = REP_CAP) => (weight ? weight * (1 + Math.min(reps, cap) / 30) : reps);
+export const setStrength = (s, cap) => strength(s.weight, s.reps, cap);
+// Reps at `weight` that match a strength score (whole reps, rounded down so it never over-promises).
+export const repsAt = (score, weight) => (weight ? Math.floor(30 * (score / weight - 1) + 1e-6) : Math.floor(score + 1e-6));
+// A set counts as on target when it's at least as strong as the planned set, however
+// the weight and reps were mixed (15 × 45 beats 10 × 50).
+// Same weight: just compare reps.
+export const beats = (s, weight, reps) => (s.weight === weight ? s.reps >= reps : setStrength(s) >= strength(weight, reps) - 1e-6);
+const TOL = 0.005; // within 0.5% of the target's strength counts as the same
+
+// Double progression (reps up to the top of the range, then weight), judged on strength
+// so any mix of reps and weight is weighed fairly. Only the planned sets count towards
+// the target; extra sets added on the day are bonus work and never lower it.
 // cfg: { sets, min, max }  t: target { weight, sets }  done: [{ reps, weight }] in set order
 // Returns the next target plus a short reason and direction for the summary.
 export function nextTarget(cfg, step, t, done, missStreak = 0) {
   const tr = setTargets(t, cfg);
   const fill = (r) => Array(cfg.sets).fill(r);
-  const out = (weight, sets, miss, dir, why) => ({ weight, sets, reps: sets[0], miss, dir, why });
-  const reps = done.map((s) => s.reps);
-  const minW = Math.min(...done.map((s) => s.weight));
+  const out = (weight, sets, miss, dir, why) => ({ weight: Math.max(0, round(weight)), sets, reps: sets[0], miss, dir, why });
+  const work = done.slice(0, cfg.sets);
+  if (work.length < cfg.sets) return out(t.weight, tr, missStreak, 'same', 'Not all sets done, same target');
 
-  // Had to go lighter: start from what was managed at that weight and build back up.
-  if (minW < t.weight) {
-    const at = done.filter((s) => s.weight === minW).map((s) => s.reps);
-    const arr = tr.map((_, i) => clamp(at[Math.min(i, at.length - 1)], 1, cfg.max));
-    return out(minW, bumpLowest(arr, cfg.max), 0, 'down', `Dropped to ${minW} kg, build back up`);
+  const cap = Math.max(REP_CAP, cfg.max);
+  const got = sum(work.map((s) => setStrength(s, cap)));
+  const want = sum(tr.map((r) => strength(t.weight, r, cap)));
+  const met = got >= want * (1 - TOL);
+
+  // Bodyweight: reps only.
+  if (!t.weight && work.every((s) => !s.weight)) {
+    const reps = work.map((s) => s.reps);
+    if (reps[0] >= cfg.max && reps.every((r) => r >= cfg.max - 1)) return out(step, fill(cfg.min), 0, 'up', `Top of range, add ${step} kg`);
+    if (met) {
+      const arr = bumpLowest(reps.map((r) => Math.min(r, cfg.max)), cfg.max);
+      const gain = sum(arr) - sum(tr);
+      return out(0, arr, 0, 'up', gain > 0 ? `+${gain} rep${gain > 1 ? 's' : ''}` : 'Same target');
+    }
+    if (missStreak >= 1) return out(0, reps.map((r) => clamp(r, 1, cfg.max)), 0, 'down', 'Short twice, reset to what you did');
+    const short = sum(tr) - sum(reps);
+    return out(0, tr, 1, 'same', `Short ${short} rep${short > 1 ? 's' : ''}, same target`);
   }
-  // Even the first, freshest set couldn't reach the range: too heavy for now.
-  // (Later sets dropping below it is normal fatigue and is handled below.)
-  if (reps[0] < cfg.min) {
-    return out(Math.max(0, round(t.weight - step)), fill(cfg.min), 0, 'down', `Under ${cfg.min} reps, −${step} kg`);
+
+  // The weight most of the sets were done at (heavier on a tie).
+  const count = {};
+  work.forEach((s) => { count[s.weight] = (count[s.weight] || 0) + 1; });
+  const used = Object.keys(count).map(Number).sort((a, b) => count[b] - count[a] || b - a)[0];
+  // Lighter but at least as strong (15 × 45 vs 10 × 50): keep the planned weight.
+  let w = used < t.weight && met ? t.weight : used;
+  const off = work.some((s) => s.weight !== t.weight);
+  // What each set is worth at weight `x`: actual reps if done at x, otherwise converted.
+  const at = (x) => work.map((s) => (s.weight === x ? s.reps : repsAt(setStrength(s, cap), x)));
+  let eq = at(w);
+
+  // Even the first, freshest set is under the range: too heavy for now.
+  if (eq[0] < cfg.min) {
+    let n = 0;
+    while (w > 0 && eq[0] < cfg.min && n++ < 20) { w = Math.max(0, round(w - step)); eq = at(w); }
+    const arr = bumpLowest(eq.map((r) => clamp(r, 1, cfg.max)), cfg.max);
+    // Went heavier than planned and was still stronger overall: that's progress, not a drop.
+    if (met && w > t.weight) return out(w, arr, 0, 'up', `Stronger, moved up to ${w} kg`);
+    return out(w, arr, 0, 'down', `Under ${cfg.min} reps, down to ${w} kg`);
   }
-  if (done.length < cfg.sets) {
-    return out(t.weight, tr, missStreak, 'same', 'Not all sets done, same target');
+  // Top of the range: first set at the top, the rest within a rep of it. Add weight; the
+  // reps to aim for come from your strength at the new weight, less one rep to be safe.
+  if (eq[0] >= cfg.max && eq.every((r) => r >= cfg.max - 1)) {
+    const nw = round(w + step);
+    const arr = work.map((s) => clamp(repsAt(setStrength(s, cap), nw) - 1, cfg.min, cfg.max));
+    return out(nw, arr, 0, 'up', `Top of range, +${round(nw - t.weight) || step} kg`);
   }
-  // Top of the range: first set at the top, the rest within a rep of it.
-  if (reps[0] >= cfg.max && reps.every((r) => r >= cfg.max - 1)) {
-    return out(round(t.weight + step), fill(cfg.min), 0, 'up', `Top of range, +${step} kg`);
+  if (met) {
+    const arr = bumpLowest(eq.map((r) => clamp(r, 1, cfg.max)), cfg.max);
+    if (off) {
+      const odd = work.find((s) => s.weight !== t.weight);
+      return out(w, arr, 0, 'up', w === t.weight ? `${odd.reps} × ${odd.weight} beat ${tr[0]} × ${t.weight}` : `Stronger, now at ${w} kg`);
+    }
+    const gain = sum(arr) - sum(tr);
+    return out(w, arr, 0, 'up', gain > 0 ? `+${gain} rep${gain > 1 ? 's' : ''}` : 'Same target');
   }
-  const got = sum(reps), want = sum(tr);
-  if (got >= want) {
-    const arr = bumpLowest(reps.map((r) => Math.min(r, cfg.max)), cfg.max);
-    const gain = sum(arr) - want;
-    return out(t.weight, arr, 0, 'up', gain > 0 ? `+${gain} rep${gain > 1 ? 's' : ''}` : 'Same target');
-  }
-  const short = want - got;
-  if (missStreak >= 1) {
-    return out(t.weight, reps.map((r) => Math.min(r, cfg.max)), 0, 'down', 'Short twice, reset to what you did');
-  }
-  return out(t.weight, tr, 1, 'same', `Short ${short} rep${short > 1 ? 's' : ''}, same target`);
+  // Weaker than the target.
+  if (w < t.weight) return out(w, bumpLowest(eq.map((r) => clamp(r, 1, cfg.max)), cfg.max), 0, 'down', `Dropped to ${w} kg, build back up`);
+  const pct = Math.round((1 - got / want) * 100);
+  if (missStreak >= 1) return out(w, eq.map((r) => clamp(r, 1, cfg.max)), 0, 'down', 'Short twice, reset to what you did');
+  return out(t.weight, tr, 1, 'same', pct >= 1 ? `${pct}% short, same target` : 'Just short, same target');
 }
 
 // ---------- set-by-set adjustment during a workout ----------
@@ -129,18 +177,23 @@ export function liveSet(cfg, plan, step, logs) {
     return { ...r, why: same ? '' : why };
   };
   if (last.weight !== prev.weight) return res(last.reps + shape, last.weight, `Matched to your last set (${last.reps} × ${last.weight || 'BW'})`);
+  // Way off the range: move the weight one step, with reps worked out from that set's strength.
   if (last.weight && last.reps <= Math.min(cfg.min, prev.reps) - 2) {
     const w = Math.max(0, round(last.weight - step));
-    return res(cfg.min, w, `Last set was well under ${cfg.min} reps, −${step} kg`);
+    const r = w ? Math.max(repsAt(setStrength(last), w) + shape, Math.min(cfg.min, last.reps + 1)) : cfg.min;
+    return res(r, w, `Last set was well under ${cfg.min} reps, −${step} kg`);
   }
-  if (last.weight && last.reps >= Math.max(cfg.max, prev.reps) + 2) return res(cfg.min, round(last.weight + step), `Last set was well over ${cfg.max} reps, +${step} kg`);
+  if (last.weight && last.reps >= Math.max(cfg.max, prev.reps) + 2) {
+    const w = round(last.weight + step);
+    return res(Math.max(cfg.min, repsAt(setStrength(last), w) + shape), w, `Last set was well over ${cfg.max} reps, +${step} kg`);
+  }
   const why = last.reps > prev.reps ? `Up from your last set (${last.reps} reps)` : last.reps < prev.reps ? `Adjusted to your last set (${last.reps} reps)` : 'Following your last set';
   return res(last.reps + shape, last.weight, why);
 }
 
 // Estimated one-rep max (Epley) of the session's strongest set; reps alone for bodyweight.
 export function e1rm(sets) {
-  return Math.max(...sets.map((s) => (s.weight ? s.weight * (1 + s.reps / 30) : s.reps)));
+  return Math.max(...sets.map(setStrength));
 }
 
 // Heaviest set, then most reps at that weight.

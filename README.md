@@ -15,13 +15,19 @@ The first time you open it, enter **your code**. You stay signed in on that phon
 
 Each exercise has a rep range (e.g. 10–15) and a weight, and **every set has its own rep target** — later sets are allowed to be lower, because that's normal fatigue (e.g. 12 · 11 · 10).
 
-- The session is judged on **total reps**, not set by set. Target 10 · 10 · 10 and you did 11 · 10 · 9? Same total — that counts, and next time asks for one more rep on your weakest set.
-- **Weight goes up** one step (2.5 kg by default — type any amount per exercise) when your first set reaches the top of the range and the others are within a rep of it (e.g. 15 · 15 · 14). Reps then go back to the bottom of the range.
-- **Short** of the total once → same target next time. Short twice in a row → the target resets to what you actually did, then builds back up.
-- Had to **drop the weight** → next time starts from the lighter weight and builds back up.
-- Even your **first set** couldn't reach the bottom of the range → weight comes down one step.
+**Every set is scored on strength**, so reps and weight are weighed together rather than separately. The score is the Epley estimate of your one-rep max (weight × (1 + reps ÷ 30)), with reps past 15 not adding any more (the estimate gets unreliable that high), unless the exercise's own range goes higher. So 15 × 45 counts as stronger than 10 × 50, and 4 sets of 8 × 45 counts as weaker than 10 × 50.
 
-**During a workout, each set adjusts to the one before.** Get fewer reps than the target and the next set comes down to match; beat it and the next set goes up (never past the top of the range). The plan's own drop-off between sets is kept (e.g. 12 · 11 · 10). Change the weight and the next set follows that weight. Land well under the range (2+ reps below) and the next set drops one weight step; well over it and it goes up one step. The card says why it changed. Next week's target is still worked out from the whole session, as above.
+- The session is judged on the **total strength of your planned sets**, not set by set. Target 10 · 10 · 10 and you did 11 · 10 · 9? Same total — that counts, and next time asks for one more rep on your weakest set.
+- **Different weight, same or better strength** (e.g. 15 × 45 when the target was 10 × 50) → counts as progress. Next time stays at the planned weight with reps worked out from what you did (about 11 × 50). Went heavier and was stronger → the target moves up to that weight.
+- **Weight goes up** one step (2.5 kg by default — type any amount per exercise) when your first set reaches the top of the range and the others are within a rep of it (e.g. 15 · 15 · 14). The new reps are worked out from your strength at the new weight, less one rep to be safe (never below the bottom of the range).
+- **Short** of the target once → same target next time. Short twice in a row → the target resets to what you actually did, then builds back up.
+- Had to **drop the weight** and were weaker → next time starts from the lighter weight and builds back up.
+- Even your **first set** couldn't reach the bottom of the range → weight comes down until it would.
+- **Extra sets** you add on the day are bonus work: they never change the target. The app never suggests adding sets — the number of sets is what you planned.
+
+**During a workout, each set adjusts to the one before.** Get fewer reps than the target and the next set comes down to match; beat it and the next set goes up (never past the top of the range). The plan's own drop-off between sets is kept (e.g. 12 · 11 · 10). Change the weight and the next set follows that weight. Land well under the range (2+ reps below) and the next set drops one weight step; well over it and it goes up one step, with reps worked out from that set's strength. The set bars go green whenever a set is at least as strong as planned, whatever mix of reps and weight. The card says why it changed. Next week's target is still worked out from the whole session, as above.
+
+Want one more set? Tap **Add a set, swap, skip or superset** → **+ Add a set**, or **+ One more set of …** straight after an exercise's last set.
 
 Exercises are remembered across programs, so adding "Leg press" to a new program picks up where you left off.
 
@@ -48,7 +54,7 @@ Plain HTML, CSS and JavaScript — no build step. Run any static server in this 
 ## Fixing mistakes and changing order
 
 - **Busy machine?** During a workout tap the list icon (top right) and pick any exercise to do next. Sets already done are kept.
-- **Change things just for today:** during a workout tap **Swap, skip or change superset** (or any exercise in the list) to swap it for another exercise, skip it (or stop early and keep the sets you did), take it out of a superset or superset it with something else. **+ Add an exercise for today** adds an extra. Your plan stays the same, and a swapped exercise keeps its own targets.
+- **Change things just for today:** during a workout tap **Add a set, swap, skip or superset** (or any exercise in the list) to swap it for another exercise, skip it (or stop early and keep the sets you did), take it out of a superset or superset it with something else. **+ Add an exercise for today** adds an extra. Your plan stays the same, and a swapped exercise keeps its own targets.
 - **Change the plan mid-workout:** the list's **Change the plan for this workout** opens the workout editor. Anything you change there (sets, reps, new exercises, supersets) updates the workout you're doing straight away, keeping your logged sets and today's swaps and skips.
 - **Mistyped a set?** Tap "Done: …" on the set screen, or a finished exercise in the list, to change reps/weight or delete a set. Past sessions can be fixed from **Progress → exercise → Recent sessions**. Runs can be edited by tapping them.
 - **Supersets:** tap an exercise in a workout → **Superset with …** to link it to the next one (2 or 3+). During the workout their sets alternate: A, B, A, B…

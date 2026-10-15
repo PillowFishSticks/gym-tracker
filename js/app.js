@@ -508,6 +508,7 @@ function vTrain() {
     </div>
     <div class="stack4"><h1>All done</h1><div class="sub">${sets} set${sets === 1 ? '' : 's'} logged. Fancy one more, or call it a day?</div></div>
     <div class="grow"></div>
+    ${(() => { const p = justDone(a, null); return p ? `<button class="btn btn-ghost" data-act="moreSet" data-k="${p.k}">+ One more set of ${esc(exName(p.exId))}</button>` : ''; })()}
     <button class="btn btn-ghost" data-act="addTodayForm">+ Add another exercise</button>
     <button class="btn btn-primary" data-act="finishNow">Finish workout</button>`;
   }
@@ -531,7 +532,8 @@ function vTrain() {
       <h1>${esc(exName(it.exId))}</h1>
       <div class="sub">Range ${it.min}–${it.max} reps · ${prev ? `last time ${esc(setsText(prev.sets))}` : 'first time'}</div>
       ${todayNote(it) ? `<div class="small">${esc(todayNote(it))}</div>` : ''}
-      <button class="linkbtn" data-act="exOpts" data-k="${it.k}" style="align-self:flex-start;padding:4px 0">Swap, skip or change superset</button>
+      <button class="linkbtn" data-act="exOpts" data-k="${it.k}" style="align-self:flex-start;padding:4px 0">Add a set, swap, skip or superset</button>
+      ${(() => { const p = justDone(a, it); return p ? `<button class="linkbtn" data-act="moreSet" data-k="${p.k}" style="align-self:flex-start;padding:0;color:var(--muted);font-weight:500">+ One more set of ${esc(exName(p.exId))}</button>` : ''; })()}
     </div>
     <div class="setbars" aria-hidden="true">${bars.map((c) => `<span class="${c}"></span>`).join('')}</div>
     <div class="setcard">
@@ -586,6 +588,11 @@ function sQueue() {
 
 const planKey = (x) => x.from || x.exId;
 const isDone = (a, x) => !!x.stop || (a.logs[x.k] || []).length >= x.sets;
+// The exercise whose last set was just logged, if it's now finished and isn't `now`.
+function justDone(a, now) {
+  const p = activeItem(a.hist.at(-1));
+  return p && p !== now && isDone(a, p) ? p : null;
+}
 const activeItem = (k) => S.active.items.find((x) => String(x.k) === String(k));
 
 function nextK(a) {
@@ -668,6 +675,7 @@ function sExOpts() {
     ${i !== a.ex ? `<button class="btn btn-primary" data-act="jumpEx" data-i="${i}">Do this now</button>` : ''}
     <div class="eyebrow">Just for today</div>
     <div class="stack" style="gap:8px">
+      <button class="btn btn-ghost btn-small" data-act="moreSet" data-k="${it.k}">+ Add a set</button>
       ${n ? '' : `<button class="btn btn-ghost btn-small" data-act="swapForm" data-k="${it.k}">Swap for another exercise</button>`}
       ${it.group ? `<button class="btn btn-ghost btn-small" data-act="ssOut" data-k="${it.k}">Take out of superset</button>` : ''}
       ${others.map((x) => `<button class="btn btn-ghost btn-small" data-act="ssWith" data-k="${it.k}" data-w="${x.k}" style="color:var(--lift)">${it.group ? 'Add' : 'Superset with'} ${esc(exName(x.exId))}${it.group ? ' to superset' : ''}</button>`).join('')}
@@ -808,10 +816,11 @@ function nextInSuperset(a, it) {
   return [...block.slice(pos + 1), ...block.slice(0, pos)].find((x) => !isDone(a, x)) || null;
 }
 
-// Set bars stay honest against the plan's own target for that set.
+// Set bars stay honest against the plan's own target for that set, judged on strength
+// so more reps at a lighter weight can still count (15 × 45 beats 10 × 50).
 function hitPlan(it, i, s) {
   const t = targetFor(it.exId, it);
-  return s.reps >= setReps(t, i) && s.weight >= t.weight;
+  return L.beats(s, t.weight, setReps(t, i));
 }
 
 function logSet(set) {
@@ -855,7 +864,9 @@ function finishWorkout() {
   const entries = [];
   a.items.forEach((it) => {
     const sets = a.logs[it.k];
-    if (sets && sets.length) entries.push({ exId: it.exId, cfg: { sets: it.stop ? sets.length : it.sets, min: it.min, max: it.max }, target: targetFor(it.exId, it), sets });
+    // cfg.sets is the planned count: sets added on the day are extra work, not part of the target.
+    const planned = it.plan || it.sets;
+    if (sets && sets.length) entries.push({ exId: it.exId, cfg: { sets: it.stop ? Math.min(sets.length, planned) : planned, min: it.min, max: it.max }, target: targetFor(it.exId, { ...it, sets: planned }), sets });
   });
   S.active = null;
   wake(false);
@@ -1904,7 +1915,7 @@ const A = {
     const it = a.items.find((x) => String(x.k) === d.k);
     const t = targetFor(it.exId, it);
     openSetEditor(exName(it.exId), `Target ${L.repsText(t.sets)} × ${fmtW(t.weight)}${t.weight ? ' kg' : ''}`, a.logs[it.k] || [], exStep(it.exId), (sets) => {
-      a.logs[it.k] = sets.map((s, i) => ({ ...s, hit: s.reps >= setReps(t, i) && s.weight >= t.weight }));
+      a.logs[it.k] = sets.map((s, i) => ({ ...s, hit: L.beats(s, t.weight, setReps(t, i)) }));
       a.hist = a.hist.filter((k) => k !== it.k).concat(sets.map(() => it.k));
       // a finished exercise that now has sets missing comes back as the current one
       const i = a.items.indexOf(it);
@@ -1921,7 +1932,10 @@ const A = {
     const e = s?.entries.find((x) => x.exId === d.ex);
     if (!e) return;
     openSetEditor(exName(e.exId), `${s.workoutName} · ${L.fmtDate(s.date, { weekday: 'short', year: 'numeric' })}`, e.sets, exStep(e.exId), (sets) => {
-      if (sets.length) e.sets = sets.map((x, i) => ({ ...x, hit: x.reps >= L.setTargets(e.target, e.cfg)[i] && x.weight >= e.target.weight }));
+      if (sets.length) {
+        const tr = L.setTargets(e.target, e.cfg);
+        e.sets = sets.map((x, i) => ({ ...x, hit: L.beats(x, e.target.weight, tr[Math.min(i, tr.length - 1)]) }));
+      }
       else {
         // Deleting every set = it was never done. If this was its latest session,
         // put next time's target back to what it was before, as if it was skipped.
@@ -1975,6 +1989,26 @@ const A = {
   exOpts(d) {
     ui.opt = d.k;
     openSheet(sExOpts);
+  },
+  // One more set of an exercise, just for today (never suggested, only when asked).
+  // A finished exercise comes back as the current one for that extra set.
+  moreSet(d) {
+    const a = S.active;
+    const it = activeItem(d.k);
+    if (!it) return;
+    it.plan = it.plan || it.sets;
+    it.sets++;
+    delete it.stop;
+    const i = a.items.indexOf(it);
+    if (i < a.ex) {
+      a.items.splice(i, 1);
+      a.ex--;
+      a.items.splice(a.ex, 0, it);
+    }
+    closeSheet();
+    save();
+    render(true);
+    toast(`Set ${it.sets} of ${exName(it.exId)} added for today`);
   },
   swapForm(d) {
     ui.swap = { k: d.k };
