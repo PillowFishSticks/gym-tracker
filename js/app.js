@@ -85,6 +85,7 @@ async function pullRemote() {
     if (r.state && (r.savedAt || 0) > (S.savedAt || 0) && !Sync.isDirty()) {
       S = { ...blank(), ...r.state };
       persist(S);
+      applyFixes();
       render();
     }
     setSync('ok');
@@ -2746,6 +2747,43 @@ if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js').then((reg) => reg.update()).catch(() => {});
   }
 }
+// One-off data fixes, run on open and after loading the sheet's copy. Each one only acts if its
+// exact problem is still there, so it's safe to run again and again.
+function applyFixes() {
+  if (S.demo) return;
+  let changed = false;
+  // 15 Oct 2026: wrist curls were logged as 0 reps on every set — they should have been skipped.
+  const DAY = '2026-10-15';
+  const isWrist = (id) => /wrist\s*curl/i.test(S.exercises[id]?.name || '');
+  const allZero = (sets) => sets.length > 0 && sets.every((x) => !Number(x.reps));
+  for (const s of S.sessions.filter((x) => x.date === DAY)) {
+    for (const e of s.entries.filter((x) => isWrist(x.exId) && allZero(x.sets))) {
+      const latest = exSessions(e.exId).at(-1);
+      s.entries = s.entries.filter((x) => x !== e);
+      if (latest && latest.id === s.id && e.target) {
+        S.targets[e.exId] = { weight: e.target.weight, reps: e.target.reps, sets: e.target.sets, miss: 0 };
+      }
+      changed = true;
+    }
+    if (!s.entries.length) S.sessions = S.sessions.filter((x) => x !== s);
+  }
+  const a = S.active;
+  if (a && a.date === DAY) {
+    for (const it of a.items.filter((x) => isWrist(x.exId) && allZero(a.logs[x.k] || []))) {
+      delete a.logs[it.k];
+      a.hist = a.hist.filter((k) => k !== it.k);
+      const i = a.items.indexOf(it);
+      a.items.splice(i, 1);
+      if (i < a.ex) a.ex--;
+      if (!it.today) (a.skipped = a.skipped || []).push(planKey(it));
+      normGroups(a.items);
+      changed = true;
+    }
+  }
+  if (changed) save();
+}
+
+applyFixes();
 if (S.active) wake(true);
 render(true);
 // Get the sheet's latest copy on open and whenever the app comes back to the front.
