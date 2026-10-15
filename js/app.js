@@ -466,18 +466,17 @@ function exList(w) {
 const doneWhen = (iso) => (iso === today() ? 'today' : `on ${DAY_LONG[DAYS[(L.parseDate(iso).getDay() + 6) % 7]]}`);
 const tickIcon = () => svg('<path d="M5 12.5l4.5 4.5L19 7.5"/>', 22, 3);
 
-// A finished workout: what was done on each exercise. This week's can be fixed by tapping
-// an exercise (change reps/weight, add or delete sets; delete them all to drop it).
+// A finished workout: what was done on each exercise. This week's have a pencil that opens
+// the whole workout for fixing.
 function sessionCard(s, from = '') {
   const sets = s.entries.reduce((n, e) => n + e.sets.length, 0);
   const edit = s.date >= weekMonday();
   return `<div class="card done">
       <div class="hrow lift" style="gap:8px"><span>${tickIcon()}</span><span class="cond grow" style="font-size:26px">${esc(s.workoutName)} complete</span>
+        ${edit ? `<button class="iconbtn delbtn" data-act="editWorkout" data-id="${s.id}" data-from="${from}" aria-label="Edit ${esc(s.workoutName)}" style="margin-right:0">${svg('<path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/>', 20)}</button>` : ''}
         <button class="iconbtn delbtn" data-act="askDelSession" data-id="${s.id}" aria-label="Delete ${esc(s.workoutName)}">${I.bin}</button></div>
       <div class="small">Done ${doneWhen(s.date)} · ${sets} sets · ${s.minutes} min</div>
-      <div class="stack4">${s.entries.map((e) => edit
-        ? `<button class="line-item" data-act="editSession" data-sid="${s.id}" data-ex="${e.exId}" data-from="${from}" style="padding:9px 0;min-height:44px"><span>${esc(exName(e.exId))}</span><span class="muted">${esc(setsText(e.sets))} <span class="lift" style="font-weight:600">&nbsp;Edit</span></span></button>`
-        : `<div class="line-item" style="padding:9px 0;min-height:0"><span>${esc(exName(e.exId))}</span><span class="muted">${esc(setsText(e.sets))}</span></div>`).join('')}</div>
+      <div class="stack4">${s.entries.map((e) => `<div class="line-item" style="padding:9px 0;min-height:0"><span>${esc(exName(e.exId))}</span><span class="muted">${esc(setsText(e.sets))}</span></div>`).join('')}</div>
     </div>`;
 }
 
@@ -794,6 +793,57 @@ function sEditSets() {
     <button class="btn btn-primary" data-act="esSave">Save changes</button>`;
 }
 
+// Apply corrected sets to one exercise of a finished workout. No sets = it was never done.
+// If this is the latest session of that workout for the exercise, next time's target is
+// re-worked out from the corrected sets (or put back to before, if removed). Returns true then.
+function applyEntryEdit(s, e, sets) {
+  const latest = exSessions(e.exId, s.workoutId).at(-1);
+  const isLatest = latest && latest.id === s.id && e.target;
+  if (sets.length) {
+    if (e.target && e.cfg) {
+      const tr = L.setTargets(e.target, e.cfg);
+      e.sets = sets.map((x, i) => ({ ...x, hit: L.beats(x, e.target.weight, tr[Math.min(i, tr.length - 1)]) }));
+    } else e.sets = sets.map((x) => ({ ...x }));
+    if (isLatest && e.cfg) {
+      const nx = L.nextTarget({ ...e.cfg, sets: Math.min(e.cfg.sets, sets.length) }, exStep(e.exId), e.target, e.sets, 0);
+      setT(e.exId, s.workoutId, { weight: nx.weight, reps: nx.reps, sets: nx.sets, miss: nx.miss });
+    }
+  } else {
+    s.entries = s.entries.filter((x) => x !== e);
+    if (isLatest) setT(e.exId, s.workoutId, { weight: e.target.weight, reps: e.target.reps, sets: e.target.sets, miss: 0 });
+  }
+  return !!isLatest;
+}
+
+// Fix a whole finished workout at once: every exercise's sets on one screen.
+// ui.ws = { sid, from, entries: [{ exId, sets }] } is a draft; nothing changes until Save.
+function sEditWorkout() {
+  const ws = ui.ws;
+  const s = S.sessions.find((x) => x.id === ws.sid);
+  if (!s) return '<div class="empty">That workout has gone.</div>';
+  const mini = (e, i, f, v) => `
+    <div class="mini">
+      <button type="button" data-act="wsStep" data-e="${e}" data-i="${i}" data-f="${f}" data-d="-1" aria-label="Less ${f}">−</button>
+      <input value="${v}" inputmode="${f === 'reps' ? 'numeric' : 'decimal'}" data-input="typed" data-obj="ws" data-e="${e}" data-i="${i}" data-f="${f}" aria-label="Set ${i + 1} ${f}">
+      <button type="button" data-act="wsStep" data-e="${e}" data-i="${i}" data-f="${f}" data-d="1" aria-label="More ${f}">+</button>
+    </div>`;
+  return `
+    <div class="stack4"><h2>Edit ${esc(s.workoutName)}</h2><div class="sub">${esc(L.fmtDate(s.date, { weekday: 'long' }))}</div></div>
+    ${ws.entries.map((x, e) => `
+      <div class="stack" style="gap:8px">
+        <div class="spread" style="align-items:center"><span style="font-size:18px;font-weight:600">${esc(exName(x.exId))}</span>
+</div>
+        ${x.sets.length ? `<div class="setedit small"><span></span><span class="center">Reps</span><span class="center">kg</span><span></span></div>` : ''}
+        ${x.sets.map((st, i) => `
+          <div class="setedit"><span class="small">${i + 1}</span>${mini(e, i, 'reps', st.reps)}${mini(e, i, 'weight', st.weight)}
+            <button class="iconbtn" data-act="wsDel" data-e="${e}" data-i="${i}" aria-label="Delete set ${i + 1}">${I.close}</button></div>`).join('')}
+        ${x.sets.length ? '' : '<div class="small missc">No sets: saving removes it from this workout, as if skipped.</div>'}
+        <button class="linkbtn" data-act="wsAdd" data-e="${e}" style="align-self:flex-start;padding:4px 0">+ Add a set</button>
+      </div>`).join('<div style="border-top:1px solid var(--line2)"></div>')}
+    <button class="btn btn-primary" data-act="wsSave">Save changes</button>
+    <button class="btn btn-ghost btn-small" data-act="wsCancel">Cancel</button>`;
+}
+
 function openSetEditor(title, sub, sets, step, onSave, after) {
   ui.es = { title, sub, sets: sets.map((s) => ({ ...s })), step, save: onSave, after };
   openSheet(sEditSets);
@@ -1064,7 +1114,7 @@ function sThisWeek() {
   const ss = S.sessions.filter((x) => x.date >= mon).sort((a, b) => b.date.localeCompare(a.date));
   const rs = S.runs.filter((x) => x.date >= mon).sort((a, b) => b.date.localeCompare(a.date));
   const done = ss.length || rs.length ? `
-    <div class="stack"><div class="eyebrow">Done this week · tap to fix a mistake</div>
+    <div class="stack"><div class="eyebrow">Done this week · ✎ to fix a mistake</div>
       ${ss.map((x) => sessionCard(x, 'week')).join('')}
       ${rs.length ? `<div class="stack4">${rs.map(runLine).join('')}</div>` : ''}
     </div>` : '';
@@ -2021,31 +2071,59 @@ const A = {
     const e = s?.entries.find((x) => x.exId === d.ex);
     if (!e) return;
     openSetEditor(exName(e.exId), `${s.workoutName} · ${L.fmtDate(s.date, { weekday: 'short', year: 'numeric' })}`, e.sets, exStep(e.exId), (sets) => {
-      let redo = false;
-      if (sets.length) {
-        const tr = L.setTargets(e.target, e.cfg);
-        e.sets = sets.map((x, i) => ({ ...x, hit: L.beats(x, e.target.weight, tr[Math.min(i, tr.length - 1)]) }));
-        // Fixing the latest session of this workout re-works out next time's target from the
-        // corrected sets (a typo like 100 kg for 10 shouldn't stick). Older ones leave it alone.
-        const latest = exSessions(e.exId, s.workoutId).at(-1);
-        if (latest && latest.id === s.id && e.target && e.cfg) {
-          const nx = L.nextTarget({ ...e.cfg, sets: Math.min(e.cfg.sets, sets.length) }, exStep(e.exId), e.target, e.sets, 0);
-          setT(e.exId, s.workoutId, { weight: nx.weight, reps: nx.reps, sets: nx.sets, miss: nx.miss });
-          redo = true;
-        }
-      }
-      else {
-        // Deleting every set = it was never done. If this was its latest session,
-        // put next time's target back to what it was before, as if it was skipped.
-        const latest = exSessions(e.exId, s.workoutId).at(-1);
-        s.entries = s.entries.filter((x) => x !== e);
-        if (latest && latest.id === s.id && e.target) {
-          setT(e.exId, s.workoutId, { weight: e.target.weight, reps: e.target.reps, sets: e.target.sets, miss: 0 });
-        }
-      }
+      const redo = applyEntryEdit(s, e, sets);
       if (!s.entries.length) S.sessions = S.sessions.filter((x) => x !== s);
       toast(!sets.length ? 'Removed · treated as skipped' : redo ? 'Saved · next target updated' : 'Saved · next target unchanged (tap Change to adjust)');
-    }, d.from === 'week' ? () => openSheet(sThisWeek) : null);
+    });
+  },
+  editWorkout(d) {
+    const s = S.sessions.find((x) => x.id === d.id);
+    if (!s) return;
+    ui.ws = { sid: s.id, from: d.from || '', entries: s.entries.map((e) => ({ exId: e.exId, sets: e.sets.map((x) => ({ reps: x.reps, weight: x.weight })) })) };
+    openSheet(sEditWorkout);
+  },
+  wsStep(d) {
+    const st = ui.ws.entries[Number(d.e)].sets[Number(d.i)];
+    if (d.f === 'reps') st.reps = Math.max(0, st.reps + Number(d.d));
+    else st.weight = Math.max(0, L.round(st.weight + Number(d.d) * NUDGE));
+    renderSheet();
+  },
+  wsDel(d) {
+    ui.ws.entries[Number(d.e)].sets.splice(Number(d.i), 1);
+    renderSheet();
+  },
+  wsAdd(d) {
+    const sets = ui.ws.entries[Number(d.e)].sets;
+    const last = sets.at(-1) || { reps: 10, weight: 0 };
+    sets.push({ reps: last.reps, weight: last.weight });
+    renderSheet();
+  },
+  wsCancel() {
+    const from = ui.ws?.from;
+    ui.ws = null;
+    if (from === 'week') openSheet(sThisWeek);
+    else closeSheet();
+  },
+  wsSave() {
+    const ws = ui.ws;
+    const s = S.sessions.find((x) => x.id === ws.sid);
+    if (!s) return closeSheet();
+    let changed = 0;
+    for (const x of ws.entries) {
+      const e = s.entries.find((y) => y.exId === x.exId);
+      if (!e) continue;
+      const same = x.sets.length === e.sets.length && x.sets.every((v, i) => v.reps === e.sets[i].reps && v.weight === e.sets[i].weight);
+      if (same) continue;
+      applyEntryEdit(s, e, x.sets);
+      changed++;
+    }
+    if (!s.entries.length) S.sessions = S.sessions.filter((x) => x !== s);
+    ui.ws = null;
+    save();
+    if (ws.from === 'week') openSheet(sThisWeek);
+    else closeSheet();
+    render();
+    toast(changed ? `${s.workoutName} updated` : 'No changes');
   },
   esStep(d) {
     const s = ui.es.sets[Number(d.i)];
@@ -2599,7 +2677,8 @@ const INP = {
   // typed straight into a stepper's number (no re-render, so the keyboard stays up)
   typed(el) {
     const o = el.dataset.obj;
-    const target = o === 'es' ? ui.es.sets[Number(el.dataset.i)] : ui[o];
+    const target = o === 'es' ? ui.es.sets[Number(el.dataset.i)]
+      : o === 'ws' ? ui.ws.entries[Number(el.dataset.e)]?.sets[Number(el.dataset.i)] : ui[o];
     const v = el.dataset.f === 'reps' ? int(el.value, 0, 999, null) : num(el.value);
     if (target && v != null) target[el.dataset.f] = v;
   },
