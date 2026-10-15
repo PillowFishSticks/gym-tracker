@@ -466,14 +466,18 @@ function exList(w) {
 const doneWhen = (iso) => (iso === today() ? 'today' : `on ${DAY_LONG[DAYS[(L.parseDate(iso).getDay() + 6) % 7]]}`);
 const tickIcon = () => svg('<path d="M5 12.5l4.5 4.5L19 7.5"/>', 22, 3);
 
-// A finished workout: what was done on each exercise.
-function sessionCard(s) {
+// A finished workout: what was done on each exercise. This week's can be fixed by tapping
+// an exercise (change reps/weight, add or delete sets; delete them all to drop it).
+function sessionCard(s, from = '') {
   const sets = s.entries.reduce((n, e) => n + e.sets.length, 0);
+  const edit = s.date >= weekMonday();
   return `<div class="card done">
       <div class="hrow lift" style="gap:8px"><span>${tickIcon()}</span><span class="cond grow" style="font-size:26px">${esc(s.workoutName)} complete</span>
         <button class="iconbtn delbtn" data-act="askDelSession" data-id="${s.id}" aria-label="Delete ${esc(s.workoutName)}">${I.bin}</button></div>
       <div class="small">Done ${doneWhen(s.date)} · ${sets} sets · ${s.minutes} min</div>
-      <div class="stack4">${s.entries.map((e) => `<div class="line-item" style="padding:9px 0;min-height:0"><span>${esc(exName(e.exId))}</span><span class="muted">${esc(setsText(e.sets))}</span></div>`).join('')}</div>
+      <div class="stack4">${s.entries.map((e) => edit
+        ? `<button class="line-item" data-act="editSession" data-sid="${s.id}" data-ex="${e.exId}" data-from="${from}" style="padding:9px 0;min-height:44px"><span>${esc(exName(e.exId))}</span><span class="muted">${esc(setsText(e.sets))} <span class="lift" style="font-weight:600">&nbsp;Edit</span></span></button>`
+        : `<div class="line-item" style="padding:9px 0;min-height:0"><span>${esc(exName(e.exId))}</span><span class="muted">${esc(setsText(e.sets))}</span></div>`).join('')}</div>
     </div>`;
 }
 
@@ -790,8 +794,8 @@ function sEditSets() {
     <button class="btn btn-primary" data-act="esSave">Save changes</button>`;
 }
 
-function openSetEditor(title, sub, sets, step, onSave) {
-  ui.es = { title, sub, sets: sets.map((s) => ({ ...s })), step, save: onSave };
+function openSetEditor(title, sub, sets, step, onSave, after) {
+  ui.es = { title, sub, sets: sets.map((s) => ({ ...s })), step, save: onSave, after };
   openSheet(sEditSets);
 }
 
@@ -1056,7 +1060,15 @@ function slotTag(s) {
 // Opened from Today: this week's days, what's done, and this-week-only changes.
 function sThisWeek() {
   const p = cur();
-  return `<h2>This week</h2>` + vThisWeek(p) + `<button class="btn btn-ghost" data-act="closeSheet">Close</button>`;
+  const mon = weekMonday();
+  const ss = S.sessions.filter((x) => x.date >= mon).sort((a, b) => b.date.localeCompare(a.date));
+  const rs = S.runs.filter((x) => x.date >= mon).sort((a, b) => b.date.localeCompare(a.date));
+  const done = ss.length || rs.length ? `
+    <div class="stack"><div class="eyebrow">Done this week · tap to fix a mistake</div>
+      ${ss.map((x) => sessionCard(x, 'week')).join('')}
+      ${rs.length ? `<div class="stack4">${rs.map(runLine).join('')}</div>` : ''}
+    </div>` : '';
+  return `<h2>This week</h2>` + vThisWeek(p) + done + `<button class="btn btn-ghost" data-act="closeSheet">Close</button>`;
 }
 
 function vThisWeek(p) {
@@ -2009,9 +2021,18 @@ const A = {
     const e = s?.entries.find((x) => x.exId === d.ex);
     if (!e) return;
     openSetEditor(exName(e.exId), `${s.workoutName} · ${L.fmtDate(s.date, { weekday: 'short', year: 'numeric' })}`, e.sets, exStep(e.exId), (sets) => {
+      let redo = false;
       if (sets.length) {
         const tr = L.setTargets(e.target, e.cfg);
         e.sets = sets.map((x, i) => ({ ...x, hit: L.beats(x, e.target.weight, tr[Math.min(i, tr.length - 1)]) }));
+        // Fixing the latest session of this workout re-works out next time's target from the
+        // corrected sets (a typo like 100 kg for 10 shouldn't stick). Older ones leave it alone.
+        const latest = exSessions(e.exId, s.workoutId).at(-1);
+        if (latest && latest.id === s.id && e.target && e.cfg) {
+          const nx = L.nextTarget({ ...e.cfg, sets: Math.min(e.cfg.sets, sets.length) }, exStep(e.exId), e.target, e.sets, 0);
+          setT(e.exId, s.workoutId, { weight: nx.weight, reps: nx.reps, sets: nx.sets, miss: nx.miss });
+          redo = true;
+        }
       }
       else {
         // Deleting every set = it was never done. If this was its latest session,
@@ -2023,8 +2044,8 @@ const A = {
         }
       }
       if (!s.entries.length) S.sessions = S.sessions.filter((x) => x !== s);
-      toast(sets.length ? 'Saved · next target unchanged (tap Change to adjust)' : 'Removed · treated as skipped');
-    });
+      toast(!sets.length ? 'Removed · treated as skipped' : redo ? 'Saved · next target updated' : 'Saved · next target unchanged (tap Change to adjust)');
+    }, d.from === 'week' ? () => openSheet(sThisWeek) : null);
   },
   esStep(d) {
     const s = ui.es.sets[Number(d.i)];
@@ -2047,6 +2068,7 @@ const A = {
     es.save(es.sets);
     save();
     render();
+    if (es.after) es.after();
   },
 
   // Machine busy? Pick any remaining exercise to do now; sets already done are kept.
