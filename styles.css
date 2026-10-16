@@ -280,6 +280,11 @@ input[type="date"].input::-webkit-date-and-time-value { text-align: left; margin
   margin: 0 -20px calc(-1 * (env(safe-area-inset-bottom) + 24px)); padding: 12px 20px calc(env(safe-area-inset-bottom) + 24px);
   background: var(--card); border-top: 1px solid var(--line2);
 }
+/* A native select styled like the inputs, with a down chevron */
+.selectwrap { position: relative; display: block; }
+.selectwrap select { padding-right: 44px; font-size: 17px; font-weight: 600; background: var(--bg); }
+.selchev { position: absolute; right: 14px; top: 50%; transform: translateY(-50%) rotate(90deg); color: var(--muted); display: flex; pointer-events: none; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .grab { width: 44px; height: 5px; border-radius: 3px; background: #3A3E45; align-self: center; }
 .toast {
   position: fixed; left: 50%; top: calc(env(safe-area-inset-top) + 14px); transform: translateX(-50%);

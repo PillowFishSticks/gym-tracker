@@ -1501,32 +1501,53 @@ function capList(items, row) {
 
 const liftMatch = (name) => name.toLowerCase().includes(ui.liftQ.trim().toLowerCase());
 
+// The current program's workouts in week order (each once), with the days they're on.
+function programWorkouts(p) {
+  const out = [];
+  for (const k of DAYS) {
+    const w = p.days[k]?.workout && p.workouts[p.days[k].workout];
+    if (!w) continue;
+    let o = out.find((x) => x.w === w);
+    if (!o) out.push(o = { w, days: [] });
+    o.days.push(DAY_LONG[k].slice(0, 3));
+  }
+  return out;
+}
+
 function vProgress() {
   const p = cur();
+  const pws = p ? programWorkouts(p) : [];
+  // Pick one workout to see just its lifts and their progress in that workout; default all.
+  const pickW = pws.find((x) => x.w.id === ui.liftW)?.w || null;
+  const wname = pickW ? pickW.name.toLowerCase() : '';
+  const sessOf = (id) => (pickW ? exSessions(id).filter((x) => sameW(x, pickW.id, wname)) : exSessions(id));
   let ids = [];
-  if (p) for (const k of DAYS) {
-    const w = p.days[k]?.workout && p.workouts[p.days[k].workout];
-    if (w) for (const it of w.items) if (!ids.includes(it.exId)) ids.push(it.exId);
-  }
-  ids = ids.filter((id) => exSessions(id).length);
+  for (const { w } of pickW ? [{ w: pickW }] : pws) for (const it of w.items) if (!ids.includes(it.exId)) ids.push(it.exId);
+  ids = ids.filter((id) => sessOf(id).length);
   const runTypes = RUN_TYPES.filter((t) => runsOf(t).length);
 
   const lifts = ids.length
     ? ids.map((id) => {
-        const all = exSessions(id);
+        const all = sessOf(id);
         const ss = inRange(all);
         const last = all.at(-1);
         const best = L.bestSet(last.sets);
         const c = liftChange(ss);
         const name = exName(id);
-        return `<button class="line-item" data-act="go" data-to="exercise" data-id="${id}" data-name="${esc(name.toLowerCase())}" ${liftMatch(name) ? '' : 'hidden'}>
+        return `<button class="line-item" data-act="openLift" data-id="${id}" data-w="${esc(wname)}" data-name="${esc(name.toLowerCase())}" ${liftMatch(name) ? '' : 'hidden'}>
           <span class="stack4" style="gap:2px"><span style="font-size:17px;font-weight:500">${esc(name)}</span><span class="small">Last ${esc(dateLong(last.date))}</span></span>
           <span class="stack4" style="gap:2px;align-items:flex-end">
             <span class="hrow" style="gap:6px;color:var(--text2)">${best.reps} × ${fmtW(best.weight)}${best.weight ? ' kg' : ''} ${arrow(c ? c.dir : 'same')}</span>
             <span class="small ${c ? dirCls(c.dir) : ''}">${c ? liftChangeText(c) : ss.length ? '1 session' : 'none in period'}</span>
           </span></button>`;
       }).join('')
-    : '<div class="empty">Finish a workout and your lifts show up here.</div>';
+    : `<div class="empty" style="margin-top:12px">${pickW ? `Nothing logged in ${esc(pickW.name)} yet.` : 'Finish a workout and your lifts show up here.'}</div>`;
+  const liftPick = pws.length > 1 ? `
+    <label class="selectwrap" style="margin-top:12px"><span class="sr">Workout</span>
+      <select class="input" data-change="liftW" aria-label="Show lifts from">
+        <option value="">All workouts</option>
+        ${pws.map(({ w, days }) => `<option value="${w.id}" ${pickW === w ? 'selected' : ''}>${esc(w.name)} · ${days.join(', ')}</option>`).join('')}
+      </select><span class="selchev" aria-hidden="true">${I.chevron}</span></label>` : '';
   const liftSearch = ids.length ? `
     <label class="hrow input" style="gap:10px;margin:12px 0 4px;background:var(--bg)"><span class="muted">${I.search}</span>
       <input type="search" data-input="liftq" value="${esc(ui.liftQ)}" placeholder="Search lifts" aria-label="Search lifts" style="flex-grow:1;border:none;background:transparent;font-size:17px;outline:none"></label>
@@ -1547,13 +1568,13 @@ function vProgress() {
       }).join('')
     : '<div class="empty">Logged runs show up here.</div>';
 
-  const liftDirs = ids.map((id) => liftChange(inRange(exSessions(id)))?.dir);
+  const liftDirs = ids.map((id) => liftChange(inRange(sessOf(id)))?.dir);
   const runDirs = runTypes.map((t) => runChange(inRange(runsOf(t)))?.dir);
   return `
     <div class="spread" style="align-items:center"><h1>Progress</h1><button class="linkbtn" data-act="go" data-to="archive">Archive ${I.chevron}</button></div>
     ${rangeSeg()}
     <div class="small" style="margin-top:-8px">Arrows and changes compare your first and latest session in the ${RANGE_TEXT[ui.range]}.</div>
-    ${accordion('lifts', `Lifts${p ? ' · this program' : ''}`, ids.length, ids.length === 1 ? 'lift' : 'lifts', liftDirs, liftSearch + lifts)}
+    ${accordion('lifts', `Lifts · ${pickW ? esc(pickW.name) : p ? 'this program' : 'all'}`, ids.length, ids.length === 1 ? 'lift' : 'lifts', liftDirs, liftPick + liftSearch + lifts)}
     ${accordion('runs', 'Runs', runTypes.length, runTypes.length === 1 ? 'run type' : 'run types', runDirs, runs)}`;
 }
 
@@ -2603,6 +2624,11 @@ const A = {
     closeSheet();
     go('today');
   },
+  // Open a lift's page; with a workout picked, its history opens on that workout.
+  openLift(d) {
+    if (d.w) ui.exW = { ...(ui.exW || {}), [d.id]: d.w };
+    go('exercise', { id: d.id });
+  },
   toggleSec(d) {
     ui.open[d.k] = !ui.open[d.k];
     render();
@@ -2731,6 +2757,10 @@ const INP = {
 };
 
 const CHG = {
+  liftW(el) {
+    ui.liftW = el.value || null;
+    render();
+  },
   progStart(el) {
     const p = cur();
     if (!p || !/^\d{4}-\d{2}-\d{2}$/.test(el.value)) return;
