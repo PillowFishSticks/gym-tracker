@@ -126,6 +126,21 @@ h2 { margin: 0; font-family: var(--cond); font-size: 30px; line-height: 1.05; fo
 /* ---------- drag to reorder ---------- */
 [data-sortable] > [data-idx] { transition: transform .15s ease; }
 [data-sortable] > .dragging { transition: none; position: relative; z-index: 5; box-shadow: 0 10px 28px rgba(0, 0, 0, .6); background: #23262B; }
+/* Live workout list: each exercise can link to the next with a button on the boundary */
+.queue { gap: 16px; }
+.qitem { position: relative; }
+.qitem .row { min-height: 60px; }
+.queue .row.ss:not(.ss-last) { margin-bottom: -16px; }
+.queue .row.ss:not(.ss-first) { border-top: 0; }
+.linker {
+  position: absolute; left: 50%; bottom: -8px; transform: translate(-50%, 50%); z-index: 3;
+  display: inline-flex; align-items: center; gap: 5px; height: 30px; padding: 0 12px; border-radius: 15px;
+  border: 1px solid var(--line); background: var(--card); color: var(--muted); font-size: 13px; font-weight: 600;
+}
+.queue .row.ss:not(.ss-last) + .linker { bottom: -16px; }
+.linker.on { width: 34px; padding: 0; justify-content: center; border-color: var(--lift); background: var(--lift-bg); color: var(--lift); }
+.is-dragging .linker { visibility: hidden; }
+[data-sortable] > .dragging > .row { background: #23262B; }
 [data-sortable] > .droptarget { box-shadow: inset 0 0 0 2px var(--run); }
 .handle {
   display: flex; align-items: center; justify-content: center; flex-shrink: 0;

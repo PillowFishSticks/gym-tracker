@@ -602,20 +602,28 @@ function vTrain() {
 function sQueue() {
   const a = S.active;
   const now = a.items[a.ex];
+  const open = (i) => i >= a.ex && a.items[i] && !isDone(a, a.items[i]);
+  const chain = svg('<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>', 16, 2.2);
   return `
-    <div class="stack4"><h2>What's next?</h2><div class="sub">Tap an exercise to do it now, swap it, skip it or change its superset — just for today.</div></div>
-    <div class="stack">${a.items.map((it, i) => {
+    <div class="stack4"><h2>What's next?</h2><div class="sub">Drag ⠿ to change the order. Tap ${chain.replace('<svg', '<svg style="vertical-align:-3px"')} between two exercises to superset them (link three for a tri-set). Just for today.</div></div>
+    <div class="stack queue" data-sortable="queue">${a.items.map((it, i) => {
       const done = (a.logs[it.k] || []).length;
       const status = `${done}/${it.sets} sets`;
       const note = todayNote(it) ? `<div class="meta">${esc(todayNote(it))}</div>` : '';
-      const name = `<div><div class="name${i < a.ex ? ' muted' : ''}">${esc(exName(it.exId))}${it.group ? '<span class="sslabel">Superset</span>' : ''}</div>${note}</div>`;
+      const name = `<div class="grow"><div class="name${i < a.ex ? ' muted' : ''}">${esc(exName(it.exId))}${it.group ? '<span class="sslabel">Superset</span>' : ''}</div>${note}</div>`;
+      // A link button on the boundary with the next exercise (both still to do).
+      const linked = !!it.group && a.items[i + 1]?.group === it.group;
+      const link = open(i) && open(i + 1)
+        ? `<button class="linker${linked ? ' on' : ''}" data-act="qLink" data-i="${i}" aria-pressed="${linked}" aria-label="${linked ? 'Unlink' : 'Superset'} ${esc(exName(it.exId))} and ${esc(exName(a.items[i + 1].exId))}">${chain}${linked ? '' : '<span>Superset</span>'}</button>`
+        : '';
+      let row;
       if (i < a.ex) {
-        return `<button class="row ${ssClass(a.items, i)}" data-act="editActive" data-k="${it.k}">${name}<span class="hrow small" style="gap:6px"><span class="lift">${svg('<path d="M5 12.5l4.5 4.5L19 7.5"/>', 18, 3)}</span>${it.stop ? 'Stopped' : 'Done'} · edit</span></button>`;
+        row = `<button class="row ${ssClass(a.items, i)}" data-act="editActive" data-k="${it.k}">${name}<span class="hrow small" style="gap:6px"><span class="lift">${svg('<path d="M5 12.5l4.5 4.5L19 7.5"/>', 18, 3)}</span>${it.stop ? 'Stopped' : 'Done'} · edit</span></button>`;
+      } else {
+        const grip = `<span class="handle" data-handle aria-label="Drag to reorder">${I.grip}</span>`;
+        row = `<button class="row ${ssClass(a.items, i)}" data-act="exOpts" data-k="${it.k}" style="justify-content:flex-start${i === a.ex ? `;box-shadow: inset 0 0 0 2px ${LIME}` : ''}">${grip}${name}<span class="small${i === a.ex ? ' lift' : ''}" style="white-space:nowrap">${i === a.ex ? 'Now · ' : ''}${status}</span></button>`;
       }
-      if (i === a.ex) {
-        return `<button class="row ${ssClass(a.items, i)}" data-act="exOpts" data-k="${it.k}" style="box-shadow: inset 0 0 0 2px ${LIME}">${name}<span class="small lift">Now · ${status}</span></button>`;
-      }
-      return `<button class="row ${ssClass(a.items, i)}" data-act="exOpts" data-k="${it.k}">${name}<span class="small">${status}</span></button>`;
+      return `<div class="qitem" data-idx="${i}" ${i < a.ex ? 'data-locked' : ''}>${row}${link}</div>`;
     }).join('')}</div>
     <button class="btn btn-ghost btn-small" data-act="addTodayForm">+ Add an exercise for today</button>
     <button class="btn btn-ghost btn-small" data-act="editPlan">Change the plan for this workout</button>
@@ -2270,6 +2278,31 @@ const A = {
     render(true);
     toast(`${name} skipped today`);
   },
+  // Link / unlink an exercise with the one after it (today only). Linking next to an
+  // existing superset joins it, so linking three in a row makes a tri-set.
+  qLink(d) {
+    const a = S.active;
+    const i = Number(d.i);
+    const x = a.items[i], y = a.items[i + 1];
+    if (!x || !y) return;
+    if (x.group && x.group === y.group) {
+      // Split the superset at this point; normGroups drops any side left with one exercise.
+      const g = x.group, ng = uid();
+      for (let j = i + 1; j < a.items.length && a.items[j].group === g; j++) a.items[j].group = ng;
+      a.items.forEach((z) => { if (z.group === g || z.group === ng) z.tg = true; });
+      x.tg = y.tg = true;
+    } else {
+      const g = x.group || y.group || uid();
+      const old = y.group;
+      a.items.forEach((z) => { if (old && z.group === old) z.group = g; });
+      x.group = y.group = g;
+      a.items.forEach((z) => { if (z.group === g) z.tg = true; });
+    }
+    normGroups(a.items);
+    save();
+    render();
+    renderSheet();
+  },
   ssOut(d) {
     const a = S.active;
     const it = activeItem(d.k);
@@ -2919,6 +2952,27 @@ const SUB = {
 // data-mode="swap" swaps two items (week days); otherwise the item is moved and the rest slide.
 
 const SORT = {
+  // Today's order during a workout. Done exercises stay put. Dropping between two exercises
+  // of a superset joins it; dragging one away from its superset takes it out.
+  queue(list, from, to) {
+    const a = S.active;
+    if (!a || from < a.ex) return;
+    to = Math.max(to, a.ex);
+    if (to === from) return;
+    const it = a.items.splice(from, 1)[0];
+    a.items.splice(to, 0, it);
+    const prev = a.items[to - 1], next = a.items[to + 1];
+    const was = it.group;
+    if (prev && next && to - 1 >= a.ex && prev.group && prev.group === next.group) it.group = prev.group;
+    else if (it.group && prev?.group !== it.group && next?.group !== it.group) delete it.group;
+    if (was !== it.group) {
+      it.tg = true;
+      a.items.forEach((z) => { if (z.group && (z.group === was || z.group === it.group)) z.tg = true; });
+      toast(it.group ? `${exName(it.exId)} added to the superset` : `${exName(it.exId)} out of the superset`);
+    }
+    normGroups(a.items);
+    renderSheet();
+  },
   ex(list, from, to) {
     const items = cur().workouts[list.dataset.wid].items;
     items.splice(to, 0, items.splice(from, 1)[0]);
@@ -2944,6 +2998,8 @@ const SORT = {
 };
 
 let drag = null;
+// The scrolling box a list sits in: a bottom sheet, or the page.
+const scrollerOf = (el) => el.closest('.sheet') || document.scrollingElement;
 document.addEventListener('pointerdown', (e) => {
   const handle = e.target.closest('[data-handle]');
   const list = handle?.closest('[data-sortable]');
@@ -2953,21 +3009,27 @@ document.addEventListener('pointerdown', (e) => {
   const item = handle.closest('[data-idx]');
   const rects = items.map((el) => el.getBoundingClientRect());
   const from = items.indexOf(item);
-  drag = { list, items, item, rects, from, to: from, y: e.clientY, swap: list.dataset.mode === 'swap', pitch: items.length > 1 ? rects[1].top - rects[0].top : rects[0].height };
+  // How far the others slide to make room: the dragged item's height plus the gap.
+  const gap = items.length > 1 ? (from < items.length - 1 ? rects[from + 1].top - rects[from].bottom : rects[from].top - rects[from - 1].bottom) : 0;
+  const box = scrollerOf(list);
+  drag = { list, items, item, rects, from, to: from, y: e.clientY, cy: e.clientY, swap: list.dataset.mode === 'swap', pitch: rects[from].height + gap, box, top0: box.scrollTop, raf: 0 };
   handle.setPointerCapture(e.pointerId);
+  list.classList.add('is-dragging');
   item.classList.add('dragging');
+  navigator.vibrate?.(8);
+  autoScroll();
 });
-document.addEventListener('pointermove', (e) => {
-  if (!drag) return;
+function dragMove() {
   const { items, item, rects, from, swap, pitch } = drag;
-  const dy = e.clientY - drag.y;
+  const dy = drag.cy - drag.y + (drag.box.scrollTop - drag.top0);
   item.style.transform = `translateY(${dy}px)`;
   const centre = rects[from].top + rects[from].height / 2 + dy;
   let to = from;
   rects.forEach((r, i) => {
+    if (i === from || items[i].hasAttribute('data-locked')) return;
     const mid = r.top + r.height / 2;
     if (swap) {
-      if (i !== from && !items[i].hasAttribute('data-locked') && centre > r.top && centre < r.bottom) to = i;
+      if (centre > r.top && centre < r.bottom) to = i;
     } else if ((i < from && centre < mid) || (i > from && centre > mid)) {
       to = i < from ? Math.min(to, i) : Math.max(to, i);
     }
@@ -2982,14 +3044,35 @@ document.addEventListener('pointermove', (e) => {
     const shift = from < to && i > from && i <= to ? -pitch : from > to && i < from && i >= to ? pitch : 0;
     el.style.transform = shift ? `translateY(${shift}px)` : '';
   });
+}
+// Near the top or bottom edge of the screen/sheet, keep scrolling while the finger is held there.
+function autoScroll() {
+  if (!drag) return;
+  const box = drag.box;
+  const r = box === document.scrollingElement ? { top: 0, bottom: innerHeight } : box.getBoundingClientRect();
+  const edge = 70;
+  const v = drag.cy > r.bottom - edge ? (drag.cy - (r.bottom - edge)) / 4 : drag.cy < r.top + edge ? -((r.top + edge) - drag.cy) / 4 : 0;
+  if (v) {
+    const before = box.scrollTop;
+    box.scrollTop += Math.max(-18, Math.min(18, v));
+    if (box.scrollTop !== before) dragMove();
+  }
+  drag.raf = requestAnimationFrame(autoScroll);
+}
+document.addEventListener('pointermove', (e) => {
+  if (!drag) return;
+  drag.cy = e.clientY;
+  dragMove();
 });
 function endDrag() {
   if (!drag) return;
   const { list, items, from, to } = drag;
+  cancelAnimationFrame(drag.raf);
   items.forEach((el) => {
     el.style.transform = '';
     el.classList.remove('dragging', 'droptarget');
   });
+  list.classList.remove('is-dragging');
   drag = null;
   if (from !== to) {
     SORT[list.dataset.sortable](list, from, to);
