@@ -1,9 +1,6 @@
 // Sort It Out sync (Google Apps Script web app).
 // One Google Sheet per person, picked by their code (codes live in Config.js, which is not in git).
-// The app POSTs JSON as text/plain: { code, action: 'load' | 'save' | 'rename' | 'changeCode', ... }.
-// People can change their name and code from the app; those changes are kept in Script
-// Properties ('codes': new code -> person, 'retiredCodes': Config.js codes no longer valid,
-// 'name_<person>': display name). The person key (and their sheet) never changes.
+// The app POSTs JSON as text/plain: { code, action: 'load' | 'save', state, savedAt }.
 
 function doPost(e) {
   let req;
@@ -12,36 +9,13 @@ function doPost(e) {
   } catch (err) {
     return reply({ ok: false, error: 'bad request' });
   }
-  const code = String(req.code || '').trim();
-  const person = personFor(code);
-  if (!person) return reply({ ok: false, error: 'code' });
+  const name = PEOPLE[String(req.code || '').trim()];
+  if (!name) return reply({ ok: false, error: 'code' });
 
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {
-    const props = PropertiesService.getScriptProperties();
-    const name = props.getProperty('name_' + person) || person;
-    if (req.action === 'rename') {
-      const nn = String(req.name || '').trim().slice(0, 30);
-      if (!nn) return reply({ ok: false, error: 'name' });
-      props.setProperty('name_' + person, nn);
-      try { sheetFor(person).rename('Sort It Out – ' + nn); } catch (err) { /* keep the old file name */ }
-      return reply({ ok: true, name: nn });
-    }
-    if (req.action === 'changeCode') {
-      const nc = String(req.newCode || '').trim();
-      if (!/^\d{4,8}$/.test(nc)) return reply({ ok: false, error: 'format' });
-      if (nc !== code && personFor(nc)) return reply({ ok: false, error: 'taken' });
-      const map = JSON.parse(props.getProperty('codes') || '{}');
-      const retired = JSON.parse(props.getProperty('retiredCodes') || '[]');
-      if (map[code]) delete map[code];
-      else if (!retired.includes(code)) retired.push(code);
-      map[nc] = person;
-      props.setProperty('codes', JSON.stringify(map));
-      props.setProperty('retiredCodes', JSON.stringify(retired.filter((c) => c !== nc)));
-      return reply({ ok: true, name });
-    }
-    const ss = sheetFor(person);
+    const ss = sheetFor(name);
     if (req.action === 'load') return reply({ ok: true, name, url: ss.getUrl(), ...loadState(ss) });
     if (req.action === 'save') {
       const savedAt = req.savedAt || Date.now();
@@ -53,17 +27,6 @@ function doPost(e) {
   } finally {
     lock.releaseLock();
   }
-}
-
-// A code's person: a code set from the app first, then Config.js (unless it was changed away).
-function personFor(code) {
-  if (!code) return null;
-  const props = PropertiesService.getScriptProperties();
-  const map = JSON.parse(props.getProperty('codes') || '{}');
-  if (map[code]) return map[code];
-  const retired = JSON.parse(props.getProperty('retiredCodes') || '[]');
-  if (retired.includes(code)) return null;
-  return PEOPLE[code] || null;
 }
 
 function doGet() {

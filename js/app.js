@@ -81,7 +81,7 @@ async function pullRemote() {
     const r = await Sync.loadRemote(sess.code);
     if (!r.ok && r.error === 'code') return codeChanged();
     if (!r.ok) return;
-    if ((r.url && r.url !== sess.url) || (r.name && r.name !== sess.name)) Sync.setSession({ ...sess, url: r.url || sess.url, name: r.name || sess.name });
+    if (r.url && r.url !== sess.url) Sync.setSession({ ...sess, url: r.url });
     if (r.state && (r.savedAt || 0) > (S.savedAt || 0) && !Sync.isDirty()) {
       S = { ...blank(), ...r.state };
       persist(S);
@@ -112,7 +112,11 @@ function syncNote() {
   const el = document.getElementById('syncnote');
   if (!el) return;
   let msg = '';
-  if (Sync.getSession() && S.demo) msg = 'Demo data: nothing here is saved to your Google Sheet.';
+  if (Sync.getSession() && S.demo) {
+    el.innerHTML = 'Demo data: nothing here is saved. <button class="linkbtn" data-act="clearDemo" style="padding:0;font-size:inherit;color:var(--lift)">Back to my data</button>';
+    el.hidden = false;
+    return;
+  }
   else if (Sync.getSession() && Sync.isDirty() && (ui.sync === 'error' || ui.sync === 'offline')) msg = 'Not saved to your Google Sheet yet. It’ll retry when you’re online.';
   el.textContent = msg;
   el.hidden = !msg;
@@ -1209,16 +1213,10 @@ function vWeek() {
   if (!p) {
     return `<h1>My week</h1><div class="empty">No program running.</div>
       <button class="btn btn-primary" data-act="go" data-to="newprogram">New program</button>
-      <div class="grid2">
-        <button class="btn btn-ghost" data-act="go" data-to="programs">Programs</button>
-        <button class="btn btn-ghost" data-act="backup">Account</button>
-      </div>`;
+      <button class="btn btn-ghost" data-act="go" data-to="programs">Programs & Archive</button>`;
   }
   const head = `<div class="stack4"><h1>My plan</h1><div class="small">${esc(p.name)} · ${esc(weekLabel(p))}</div></div>`;
-  const foot = `<div class="grid2">
-      <button class="btn btn-ghost" data-act="go" data-to="programs">Programs</button>
-      <button class="btn btn-ghost" data-act="backup">Account</button>
-    </div>`;
+  const foot = `<button class="btn btn-ghost" data-act="go" data-to="programs">Programs</button>`;
   return head + `
     <div class="sub" style="margin-top:-8px">Your repeating week. Tap a day to see its exercises or change it, drag ⠿ onto another day to swap them for good.</div>
     <div class="stack" data-sortable="days" data-mode="swap">${DAYS.map((k, i) => {
@@ -1942,37 +1940,6 @@ function vProgramDetail(params) {
     ${p.archived ? `<button class="btn btn-ghost" data-act="go" data-to="newprogram" data-from="${p.id}">Start a new program from this one</button>` : ''}`;
 }
 
-// ---------- account ----------
-
-// Account: change your name or code, or sign out.
-function sBackup() {
-  const sess = Sync.getSession();
-  const status = S.demo ? 'Demo data isn’t saved to your sheet' : Sync.isDirty() ? 'Saving…' : 'All saved to your Google Sheet';
-  return `
-    <div class="stack4"><h2>${esc(sess.name)}</h2><div class="sub">${status}</div></div>
-    ${S.demo ? '<button class="btn btn-danger btn-small" data-act="clearDemo">Clear demo data, back to my data</button>' : ''}
-    <form class="stack" data-submit="saveName" autocomplete="off" style="gap:8px">
-      <div class="eyebrow">Name</div>
-      <div class="hrow" style="gap:8px">
-        <input class="input" name="name" value="${esc(sess.name)}" maxlength="30" required autocapitalize="words" aria-label="Your name">
-        <button class="btn btn-ghost" type="submit" style="width:auto;padding:0 18px;flex-shrink:0">Save</button>
-      </div>
-    </form>
-    <form class="stack" data-submit="saveCode" autocomplete="off" style="gap:8px">
-      <div class="eyebrow">Change code</div>
-      <div class="grid2">
-        <input class="input num" name="code1" type="password" inputmode="numeric" pattern="[0-9]*" minlength="4" maxlength="8" required placeholder="New" aria-label="New code" style="letter-spacing:.2em">
-        <input class="input num" name="code2" type="password" inputmode="numeric" pattern="[0-9]*" minlength="4" maxlength="8" required placeholder="Again" aria-label="New code again" style="letter-spacing:.2em">
-      </div>
-      <div class="small">4–8 numbers. Your other phones will ask for the new code.</div>
-      <button class="btn btn-ghost" type="submit">Change code</button>
-    </form>
-    <div class="sheetbar grid2">
-      <button class="btn btn-ghost" data-act="askSignOut" style="color:var(--miss)">Sign out</button>
-      <button class="btn btn-ghost" data-act="closeSheet">Close</button>
-    </div>`;
-}
-
 // ---------- screen wake lock during workouts ----------
 
 let lock = null;
@@ -2683,7 +2650,7 @@ const A = {
 
   async loadDemo() {
     const hasData = S.sessions.length || S.runs.length || S.programs.length;
-    if (hasData && !confirm('Replace everything in the app with demo data? Save a backup first if you want to keep what’s here.')) return;
+    if (hasData && !confirm('Replace everything in the app with demo data?')) return;
     const { buildDemo } = await import('./demo.js');
     S = buildDemo();
     ui.day = null;
@@ -2720,7 +2687,6 @@ const A = {
     render(true);
   },
 
-  backup: () => openSheet(sBackup),
 };
 
 // input events (no re-render, so the keyboard stays open)
@@ -2822,40 +2788,6 @@ const CHG = {
 };
 
 const SUB = {
-  async saveName(form) {
-    const sess = Sync.getSession();
-    const name = form.elements.name.value.trim();
-    if (!name || name === sess.name) return;
-    try {
-      const r = await Sync.renameRemote(sess.code, name);
-      if (!r.ok) return toast(r.error === 'action' ? 'Your sheet’s script needs updating first' : 'Couldn’t change your name');
-      Sync.setSession({ ...Sync.getSession(), name: r.name });
-      renderSheet();
-      toast('Name changed');
-    } catch (e) {
-      toast('You need to be online to change your name');
-    }
-  },
-  async saveCode(form) {
-    const f = form.elements;
-    const a = f.code1.value.trim(), b = f.code2.value.trim();
-    if (!/^\d{4,8}$/.test(a)) return toast('Use 4 to 8 numbers');
-    if (a !== b) return toast('The two codes don’t match');
-    const sess = Sync.getSession();
-    if (a === sess.code) return toast('That’s already your code');
-    try {
-      const r = await Sync.changeCodeRemote(sess.code, a);
-      if (!r.ok) {
-        const why = { taken: 'That code is already in use', format: 'Use 4 to 8 numbers', action: 'Your sheet’s script needs updating first' };
-        return toast(why[r.error] || 'Couldn’t change your code');
-      }
-      Sync.setSession({ ...Sync.getSession(), code: a });
-      closeSheet();
-      toast('Code changed');
-    } catch (e) {
-      toast('You need to be online to change your code');
-    }
-  },
   async login(form) {
     const code = form.elements.code.value.trim();
     const err = document.getElementById('loginerr');
