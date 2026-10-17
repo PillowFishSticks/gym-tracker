@@ -47,7 +47,7 @@ A program is your week (which workout and/or run goes on which day) for a set nu
 
 ## Google Sheets sync
 
-The app talks to a small Google Apps Script web app (in `sync/`, deployed from the owner's Google account with `clasp`). The script picks a person's sheet by their code and keeps the app's full data in a hidden **App data** tab, plus readable **Workouts**, **Runs** and **Targets** tabs that are rebuilt on every save. Codes live in `sync/Config.js`, which is not committed. To change code: edit `sync/`, then `clasp push` and `clasp redeploy <deploymentId>`.
+The app talks to a small Google Apps Script web app (in `sync/`, deployed from the owner's Google account with `clasp`). The script picks a person's sheet by their code and keeps the app's full data in a hidden **App data** tab, plus readable **Workouts**, **Runs** and **Targets** tabs that are rebuilt on every save. Codes live in `sync/Config.js`, which is not committed. People can change their own name and code from **Program → Account**; those changes are stored in the script's Script Properties, so Config.js stays as the starting codes. To change code: edit `sync/`, then `clasp push` and `clasp redeploy <deploymentId>`.
 
 ## For development
 

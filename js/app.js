@@ -81,7 +81,7 @@ async function pullRemote() {
     const r = await Sync.loadRemote(sess.code);
     if (!r.ok && r.error === 'code') return codeChanged();
     if (!r.ok) return;
-    if (r.url && r.url !== sess.url) Sync.setSession({ ...sess, url: r.url });
+    if ((r.url && r.url !== sess.url) || (r.name && r.name !== sess.name)) Sync.setSession({ ...sess, url: r.url || sess.url, name: r.name || sess.name });
     if (r.state && (r.savedAt || 0) > (S.savedAt || 0) && !Sync.isDirty()) {
       S = { ...blank(), ...r.state };
       persist(S);
@@ -1209,7 +1209,10 @@ function vWeek() {
   if (!p) {
     return `<h1>My week</h1><div class="empty">No program running.</div>
       <button class="btn btn-primary" data-act="go" data-to="newprogram">New program</button>
-      <button class="btn btn-ghost" data-act="go" data-to="programs">Programs & Archive</button>`;
+      <div class="grid2">
+        <button class="btn btn-ghost" data-act="go" data-to="programs">Programs</button>
+        <button class="btn btn-ghost" data-act="backup">Account</button>
+      </div>`;
   }
   const head = `<div class="stack4"><h1>My plan</h1><div class="small">${esc(p.name)} · ${esc(weekLabel(p))}</div></div>`;
   const foot = `<div class="grid2">
@@ -1939,50 +1942,35 @@ function vProgramDetail(params) {
     ${p.archived ? `<button class="btn btn-ghost" data-act="go" data-to="newprogram" data-from="${p.id}">Start a new program from this one</button>` : ''}`;
 }
 
-// ---------- backup ----------
+// ---------- account ----------
 
+// Account: change your name or code, or sign out.
 function sBackup() {
   const sess = Sync.getSession();
   const status = S.demo ? 'Demo data isn’t saved to your sheet' : Sync.isDirty() ? 'Saving…' : 'All saved to your Google Sheet';
   return `
     <div class="stack4"><h2>${esc(sess.name)}</h2><div class="sub">${status}</div></div>
-    <div class="grid2">
-      ${sess.url ? `<a class="btn btn-ghost" href="${esc(sess.url)}" target="_blank" rel="noopener">Open my sheet</a>` : '<span></span>'}
-      <button class="btn btn-ghost" data-act="askSignOut">Sign out</button>
-    </div>
-    <div class="stack4" style="margin-top:8px"><div class="eyebrow">Backup file</div>
-    <div class="small">Your Google Sheet is your backup. You can also save a file copy, or restore one.</div></div>
-    <button class="btn btn-ghost" data-act="exportData">Save backup file</button>
-    <label class="btn btn-ghost">Restore from a backup file<input type="file" accept="application/json,.json" data-change="importFile" hidden></label>
-    <div class="small center">${S.lastBackup ? `Last backup: ${esc(L.fmtDate(S.lastBackup, { year: 'numeric' }))}` : 'No backup saved yet.'}</div>
-    <div class="stack" style="margin-top:8px">
-      <div class="eyebrow">Demo data</div>
-      ${S.demo ? '<button class="btn btn-danger btn-small" data-act="clearDemo">Clear demo data, back to my data</button>' : ''}
-      <button class="btn btn-ghost btn-small" data-act="loadDemo">Try demo data (not saved to your sheet)</button>
+    ${S.demo ? '<button class="btn btn-danger btn-small" data-act="clearDemo">Clear demo data, back to my data</button>' : ''}
+    <form class="stack" data-submit="saveName" autocomplete="off" style="gap:8px">
+      <div class="eyebrow">Name</div>
+      <div class="hrow" style="gap:8px">
+        <input class="input" name="name" value="${esc(sess.name)}" maxlength="30" required autocapitalize="words" aria-label="Your name">
+        <button class="btn btn-ghost" type="submit" style="width:auto;padding:0 18px;flex-shrink:0">Save</button>
+      </div>
+    </form>
+    <form class="stack" data-submit="saveCode" autocomplete="off" style="gap:8px">
+      <div class="eyebrow">Change code</div>
+      <div class="grid2">
+        <input class="input num" name="code1" type="password" inputmode="numeric" pattern="[0-9]*" minlength="4" maxlength="8" required placeholder="New" aria-label="New code" style="letter-spacing:.2em">
+        <input class="input num" name="code2" type="password" inputmode="numeric" pattern="[0-9]*" minlength="4" maxlength="8" required placeholder="Again" aria-label="New code again" style="letter-spacing:.2em">
+      </div>
+      <div class="small">4–8 numbers. Your other phones will ask for the new code.</div>
+      <button class="btn btn-ghost" type="submit">Change code</button>
+    </form>
+    <div class="sheetbar grid2">
+      <button class="btn btn-ghost" data-act="askSignOut" style="color:var(--miss)">Sign out</button>
+      <button class="btn btn-ghost" data-act="closeSheet">Close</button>
     </div>`;
-}
-
-async function exportData() {
-  const name = `sort-it-out-${today()}.json`;
-  const file = new File([JSON.stringify(S)], name, { type: 'application/json' });
-  try {
-    if (navigator.canShare && navigator.canShare({ files: [file] }) && /Android|iPhone|iPad/i.test(navigator.userAgent)) {
-      await navigator.share({ files: [file], title: 'Sort It Out backup' });
-    } else {
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(file);
-      a.download = name;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-    }
-    S.lastBackup = today();
-    save();
-    renderSheet();
-  } catch (e) {
-    if (e.name !== 'AbortError') toast('Backup failed');
-  }
 }
 
 // ---------- screen wake lock during workouts ----------
@@ -2733,7 +2721,6 @@ const A = {
   },
 
   backup: () => openSheet(sBackup),
-  exportData,
 };
 
 // input events (no re-render, so the keyboard stays open)
@@ -2832,29 +2819,43 @@ const CHG = {
   npFrom(el) {
     ui.np.from = el.value;
   },
-  importFile(el) {
-    const file = el.files[0];
-    if (!file) return;
-    const r = new FileReader();
-    r.onload = () => {
-      try {
-        const d = JSON.parse(r.result);
-        if (d.v !== 1 || !Array.isArray(d.programs)) throw new Error('bad file');
-        if (!confirm('Replace everything on this phone with this backup?')) return;
-        S = { ...blank(), ...d };
-        save();
-        closeSheet();
-        toast('Backup restored');
-        go('today');
-      } catch (e) {
-        toast('That file isn’t a Sort It Out backup');
-      }
-    };
-    r.readAsText(file);
-  },
 };
 
 const SUB = {
+  async saveName(form) {
+    const sess = Sync.getSession();
+    const name = form.elements.name.value.trim();
+    if (!name || name === sess.name) return;
+    try {
+      const r = await Sync.renameRemote(sess.code, name);
+      if (!r.ok) return toast(r.error === 'action' ? 'Your sheet’s script needs updating first' : 'Couldn’t change your name');
+      Sync.setSession({ ...Sync.getSession(), name: r.name });
+      renderSheet();
+      toast('Name changed');
+    } catch (e) {
+      toast('You need to be online to change your name');
+    }
+  },
+  async saveCode(form) {
+    const f = form.elements;
+    const a = f.code1.value.trim(), b = f.code2.value.trim();
+    if (!/^\d{4,8}$/.test(a)) return toast('Use 4 to 8 numbers');
+    if (a !== b) return toast('The two codes don’t match');
+    const sess = Sync.getSession();
+    if (a === sess.code) return toast('That’s already your code');
+    try {
+      const r = await Sync.changeCodeRemote(sess.code, a);
+      if (!r.ok) {
+        const why = { taken: 'That code is already in use', format: 'Use 4 to 8 numbers', action: 'Your sheet’s script needs updating first' };
+        return toast(why[r.error] || 'Couldn’t change your code');
+      }
+      Sync.setSession({ ...Sync.getSession(), code: a });
+      closeSheet();
+      toast('Code changed');
+    } catch (e) {
+      toast('You need to be online to change your code');
+    }
+  },
   async login(form) {
     const code = form.elements.code.value.trim();
     const err = document.getElementById('loginerr');

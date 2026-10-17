@@ -36,3 +36,5 @@ async function call(body) {
 
 export const loadRemote = (code) => call({ code, action: 'load' });
 export const pushRemote = (code, state, savedAt) => call({ code, action: 'save', state, savedAt });
+export const renameRemote = (code, name) => call({ code, action: 'rename', name });
+export const changeCodeRemote = (code, newCode) => call({ code, action: 'changeCode', newCode });

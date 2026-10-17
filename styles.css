@@ -197,6 +197,7 @@ h2 { margin: 0; font-family: var(--cond); font-size: 30px; line-height: 1.05; fo
 .input:focus { outline: 2px solid var(--lift); outline-offset: -1px; }
 .input.num { text-align: center; font-family: var(--cond); font-size: 24px; font-weight: 700; padding: 0 4px; }
 .card .input { background: var(--bg); }
+.input.num::placeholder { letter-spacing: 0; font-family: 'Barlow', sans-serif; font-size: 17px; font-weight: 500; color: var(--dim); }
 select.input { appearance: none; -webkit-appearance: none; }
 /* iOS Safari gives date inputs a fixed minimum width that ignores width:100%,
    which pushed the Run page wider than the screen and let it slide sideways. */
