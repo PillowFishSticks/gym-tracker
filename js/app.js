@@ -1334,7 +1334,10 @@ function vRun(params) {
     ui.runForm = { type: params.type || planned || 'easy', date: today(), dist: '', time: '', pace: '', order: [] };
   }
   const f = ui.runForm;
-  const recent = S.runs.slice().sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5);
+  // Runs list: All by default, or one type. Newest first, 10 at a time.
+  const rf = RUN_TYPES.includes(ui.runF) ? ui.runF : '';
+  const listed = S.runs.filter((r) => !rf || r.type === rf).sort((a, b) => b.date.localeCompare(a.date));
+  const shown = listed.slice(0, ui.runN || 10);
   return `
     <div class="stack4"><div class="eyebrow">${f.date === today() ? 'Today' : esc(L.fmtDate(f.date, { weekday: 'long' }))}</div><h1>Log a run</h1></div>
     <div class="seg run" role="group" aria-label="Run type">${RUN_TYPES
@@ -1349,12 +1352,18 @@ function vRun(params) {
     <label class="field">Date<input class="input" type="date" data-input="runf" data-f="date" value="${f.date}" max="${today()}"></label>
     <div id="runcmp">${runCompareHtml()}</div>
     <button class="btn btn-run" data-act="saveRun">Save run</button>
-    ${recent.length ? `<div class="stack4" style="margin-top:8px"><div class="eyebrow">Recent runs</div>${recent.map(runLine).join('')}</div>` : ''}`;
+    ${S.runs.length ? `<div class="stack" style="margin-top:8px">
+      <div class="spread"><span class="eyebrow">Your runs</span><span class="small">${listed.length} run${listed.length === 1 ? '' : 's'}</span></div>
+      <div class="seg run" role="group" aria-label="Show runs">${[['', 'All'], ...RUN_TYPES.map((t) => [t, RUN_SHORT[t]])]
+        .map(([v, l]) => `<button data-act="runF" data-v="${v}" aria-pressed="${rf === v}">${l}</button>`).join('')}</div>
+      <div class="stack4">${shown.length ? shown.map(runLine).join('') : `<div class="small" style="padding:12px 2px">No ${RUN_SHORT[rf].toLowerCase()} runs yet.</div>`}</div>
+      ${listed.length > shown.length ? `<button class="btn btn-ghost btn-small" data-act="runMore">Show ${Math.min(20, listed.length - shown.length)} more</button>` : ''}
+    </div>` : ''}`;
 }
 
 const runLine = (r) => `
   <button class="line-item" data-act="runSheet" data-id="${r.id}">
-    <span class="hrow"><span class="tag run">${RUN_SHORT[r.type]}</span><span class="small">${esc(L.fmtDate(r.date, { weekday: 'short' }))}</span></span>
+    <span class="hrow"><span class="tag run">${RUN_SHORT[r.type]}</span><span class="small">${esc(L.fmtDate(r.date, { weekday: 'short', ...(r.date.slice(0, 4) !== today().slice(0, 4) ? { year: 'numeric' } : {}) }))}</span></span>
     <span style="font-size:16px">${L.fmtKm(r.distKm)} km · ${L.fmtDuration(L.paceOf(r))}/km</span>
   </button>`;
 
@@ -2661,6 +2670,15 @@ const A = {
   openLift(d) {
     if (d.w) ui.exW = { ...(ui.exW || {}), [d.id]: d.w };
     go('exercise', { id: d.id });
+  },
+  runF(d) {
+    ui.runF = d.v || '';
+    ui.runN = 10;
+    render();
+  },
+  runMore() {
+    ui.runN = (ui.runN || 10) + 20;
+    render();
   },
   toggleSec(d) {
     ui.open[d.k] = !ui.open[d.k];
