@@ -125,8 +125,11 @@ export function nextTarget(cfg, step, t, done, missStreak = 0) {
   const at = (x) => work.map((s) => (s.weight === x ? s.reps : repsAt(setStrength(s, cap), x)));
   let eq = at(w);
 
-  // Even the first, freshest set is under the range: too heavy for now.
-  if (eq[0] < cfg.min) {
+  // Even the first, freshest set is well under the range (3+ reps short): too heavy for now.
+  // Just under (1–2 reps, typical right after a weight jump, especially on dumbbells where the
+  // jump is a big %) stays at the new weight and builds up from there, instead of bouncing
+  // back and forth between two weights.
+  if (eq[0] < cfg.min - 2 || (eq[0] < cfg.min && w < t.weight)) {
     let n = 0;
     while (w > 0 && eq[0] < cfg.min && n++ < 20) { w = Math.max(0, round(w - step)); eq = at(w); }
     const arr = bumpLowest(eq.map((r) => clamp(r, 1, cfg.max)), cfg.max);
@@ -138,7 +141,8 @@ export function nextTarget(cfg, step, t, done, missStreak = 0) {
   // reps to aim for come from your strength at the new weight, less one rep to be safe.
   if (eq[0] >= cfg.max && eq.every((r) => r >= cfg.max - 1)) {
     const nw = round(w + step);
-    const arr = work.map((s) => clamp(repsAt(setStrength(s, cap), nw) - 1, cfg.min, cfg.max));
+    // May start a rep or two under the range when the jump is big (e.g. 12.5 → 15 kg dumbbells).
+    const arr = work.map((s) => clamp(repsAt(setStrength(s, cap), nw) - 1, Math.max(1, cfg.min - 2), cfg.max));
     return out(nw, arr, 0, 'up', `Top of range, +${round(nw - t.weight) || step} kg`);
   }
   if (met) {
