@@ -1,0 +1,500 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#111418">
+<title>Key Tags</title>
+<style>
+:root{
+  --bg:#f4f5f7;--card:#fff;--ink:#14171c;--muted:#6b7280;--line:#e3e6ea;
+  --accent:#1f6feb;--accent-ink:#fff;--good:#1a7f37;--good-bg:#e7f6ec;
+  --bad:#c0362c;--bad-bg:#fdecea;--warn:#9a6700;--warn-bg:#fff6dd;
+  --plate:#ffd400;--plate-front:#fff;--radius:14px;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#0f1115;--card:#181b21;--ink:#eef0f3;--muted:#9aa3ae;--line:#2a2f37;
+  --accent:#4c8dff;--good:#4ac26b;--good-bg:#12291a;--bad:#ff6b5e;--bad-bg:#2e1614;
+  --warn:#e3b341;--warn-bg:#2b2410;
+}}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+header{position:sticky;top:0;z-index:5;background:var(--card);border-bottom:1px solid var(--line);padding:12px 16px env(safe-area-inset-top)}
+.bar{display:flex;align-items:center;gap:12px;max-width:640px;margin:0 auto}
+.brand{font-weight:700;font-size:18px;margin-right:auto}
+.who{border:1px solid var(--line);background:none;color:var(--ink);border-radius:999px;padding:6px 12px;font-size:14px}
+nav{display:flex;gap:6px;max-width:640px;margin:10px auto 0}
+nav a{flex:1;text-align:center;padding:9px;border-radius:10px;text-decoration:none;color:var(--muted);font-weight:600;font-size:15px}
+nav a.on{background:var(--bg);color:var(--ink)}
+main{max-width:640px;margin:0 auto;padding:16px 16px 80px}
+h1{font-size:22px;margin:4px 0 14px}
+h2{font-size:15px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:24px 0 8px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px;margin-bottom:10px}
+.row{display:flex;align-items:center;gap:10px}
+.grow{flex:1;min-width:0}
+input,select{width:100%;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:11px 12px}
+button{font:inherit;font-weight:600;border:0;border-radius:10px;padding:11px 14px;background:var(--bg);color:var(--ink);cursor:pointer}
+button.primary{background:var(--accent);color:var(--accent-ink)}
+button.danger{color:var(--bad);background:none;padding:8px}
+button.big{width:100%;padding:15px;font-size:17px}
+button:disabled{opacity:.5}
+.plate{display:inline-block;font-family:"Arial Narrow",Arial,sans-serif;font-weight:800;letter-spacing:.06em;background:var(--plate);color:#111;border-radius:5px;padding:2px 8px;font-size:15px;border:1px solid #0002}
+.muted{color:var(--muted);font-size:14px}
+.pill{display:inline-block;font-size:13px;font-weight:600;border-radius:999px;padding:3px 9px}
+.pill.in{background:var(--good-bg);color:var(--good)}
+.pill.out{background:var(--warn-bg);color:var(--warn)}
+.pill.new{background:var(--bg);color:var(--muted)}
+a.vlink{color:inherit;text-decoration:none}
+.panel{border:2px solid var(--accent);border-radius:var(--radius);padding:16px;margin:10px 0;background:var(--card)}
+.big-count{font-size:40px;font-weight:800;line-height:1}
+.dots{display:flex;gap:6px;margin:10px 0}
+.dots span{flex:1;height:8px;border-radius:4px;background:var(--line)}
+.dots span.on{background:var(--good)}
+.log{list-style:none;margin:10px 0 0;padding:0;font-size:15px}
+.log li{padding:8px 10px;border-radius:8px;margin-bottom:6px}
+.log .good{background:var(--good-bg);color:var(--good)}
+.log .bad{background:var(--bad-bg);color:var(--bad)}
+.log .warn{background:var(--warn-bg);color:var(--warn)}
+.seg{display:flex;background:var(--bg);border-radius:12px;padding:4px;gap:4px}
+.seg button{flex:1;background:none;color:var(--muted)}
+.seg button.on{background:var(--card);color:var(--ink);box-shadow:0 1px 2px #0002}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chips button{background:var(--card);border:1px solid var(--line);font-weight:500}
+.chips button.on{border-color:var(--accent);background:var(--accent);color:var(--accent-ink)}
+.stepper{display:flex;align-items:center;gap:14px}
+.stepper button{width:44px;height:44px;font-size:22px;padding:0}
+.notice{background:var(--warn-bg);color:var(--warn);border-radius:10px;padding:10px 12px;font-size:14px;margin-bottom:12px}
+.hist{font-size:14px}
+.hist li{padding:8px 0;border-bottom:1px solid var(--line)}
+.hist ul{list-style:none;padding:0;margin:0}
+.empty{text-align:center;color:var(--muted);padding:28px 10px}
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-size:15px;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90%}
+#toast.show{opacity:1}
+</style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <div class="brand">🔑 Key Tags</div>
+    <button class="who" id="who"></button>
+  </div>
+  <nav>
+    <a href="#/" data-nav="home">Vehicles</a>
+    <a href="#/scan" data-nav="scan">Scan in / out</a>
+  </nav>
+</header>
+<main id="app"></main>
+<div id="toast"></div>
+
+<script>
+/* ===== Shared data: paste your Supabase values here (leave blank = this phone only) ===== */
+const SUPABASE_URL = "https://aglpudowsilwjakuqsdb.supabase.co";
+const SUPABASE_KEY = "sb_publishable_YzOjKCAZX2uTlFTvKb_NhQ_0tNxVvTi";
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const NFC = "NDEFReader" in window;
+const LS = "keytags.";
+const sb = (SUPABASE_URL && SUPABASE_KEY && window.supabase) ? supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
+const rid = p => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+/* ---------- storage: Supabase if configured, else localStorage ---------- */
+const store = {
+  async all(kind) {
+    if (sb) {
+      const { data, error } = await sb.from("items").select("id,data").eq("kind", kind);
+      if (error) throw error;
+      return data.map(r => ({ id: r.id, ...r.data }));
+    }
+    try { return JSON.parse(localStorage[LS + kind] || "[]"); } catch { return []; }
+  },
+  async put(kind, obj) {
+    if (sb) {
+      const { id, ...data } = obj;
+      const { error } = await sb.from("items").upsert({ id, kind, data });
+      if (error) throw error;
+      return;
+    }
+    const a = await store.all(kind);
+    const i = a.findIndex(x => x.id === obj.id);
+    if (i >= 0) a[i] = obj; else a.push(obj);
+    localStorage[LS + kind] = JSON.stringify(a);
+  },
+  async del(kind, id) {
+    if (sb) { const { error } = await sb.from("items").delete().eq("id", id); if (error) throw error; return; }
+    localStorage[LS + kind] = JSON.stringify((await store.all(kind)).filter(x => x.id !== id));
+  }
+};
+
+let db = { vehicles: [], keys: [], events: [], locations: [] };
+async function load() {
+  const [vehicles, keys, events, locations] = await Promise.all(["vehicles", "keys", "events", "locations"].map(k => store.all(k)));
+  db = { vehicles, keys, events, locations };
+  if (!db.locations.length) {
+    for (const [i, n] of ["Key board 1", "Key board 2", "Key board 3"].entries()) {
+      const l = { id: "l_" + i, name: n, order: i }; db.locations.push(l); await store.put("locations", l);
+    }
+  }
+  db.vehicles.sort((a, b) => a.at - b.at);
+  db.locations.sort((a, b) => a.order - b.order);
+}
+
+/* ---------- helpers ---------- */
+let signedInName = "";
+const me = () => signedInName || localStorage[LS + "me"] || "";
+const PEOPLE = ["Mark", "Chris", "Peter"];
+const emailFor = name => name.toLowerCase() + "@keytags.app";
+const vehicle = id => db.vehicles.find(v => v.id === id);
+const vlabel = v => v ? `${v.name} (${v.vrm})` : "Unknown vehicle";
+const keysFor = vid => db.keys.filter(k => k.vehicleId === vid).sort((a, b) => a.n - b.n);
+const lastEvent = kid => db.events.filter(e => e.keyId === kid).sort((a, b) => b.at - a.at)[0];
+const tagUrl = (vid, kid) => `${location.origin}${location.pathname}#/v/${vid}/k/${kid}`;
+const when = t => new Date(t).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+function toast(msg) { const t = $("#toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("show"), 2500); }
+function buzz(ok) { try { navigator.vibrate && navigator.vibrate(ok ? 80 : [60, 60, 60]); } catch {} }
+
+function keyStatus(k) {
+  const e = lastEvent(k.id);
+  if (!e) return `<span class="pill new">Not scanned yet</span>`;
+  if (e.action === "handover") return `<span class="pill out">With ${esc(e.to)}</span>`;
+  return e.action === "out"
+    ? `<span class="pill out">With ${esc(e.person)}</span>`
+    : `<span class="pill in">In ${esc(e.location)}</span>`;
+}
+
+function describe(e, what) {
+  if (e.action === "handover") return `<b>${esc(e.person)}</b> handed ${what} to <b>${esc(e.to)}</b>`;
+  return `<b>${esc(e.person)}</b> ${e.action === "out" ? "took" : "put"} ${what} ${e.action === "out" ? "from" : "into"} ${esc(e.location)}`;
+}
+
+/* read a tag: its serial + the key id written in its URL (if any) */
+function readTag(e) {
+  let url = "";
+  for (const r of e.message.records) {
+    if (r.recordType === "url" || r.recordType === "absolute-url") { try { url = new TextDecoder().decode(r.data); } catch {} }
+  }
+  const m = url.match(/#\/v\/([^/]+)\/k\/([^/?#]+)/);
+  const serial = e.serialNumber || "";
+  const key = (m && db.keys.find(k => k.id === m[2])) || (serial && db.keys.find(k => k.serial === serial)) || null;
+  return { serial, url, key, vid: m ? m[1] : null };
+}
+
+/* one active NFC session at a time */
+let session = null;
+function stopSession() { if (session) { session.abort(); session = null; } }
+
+/* ---------- views ---------- */
+function setNav(name) { document.querySelectorAll("[data-nav]").forEach(a => a.classList.toggle("on", a.dataset.nav === name)); }
+function renderWho() {
+  const w = $("#who");
+  w.textContent = me() ? `👤 ${me()}` : "Set your name";
+  w.style.display = (sb && !signedInName) ? "none" : "";
+}
+$("#who").onclick = async () => {
+  if (sb) {
+    if (signedInName && confirm(`Signed in as ${signedInName}. Sign out?`)) { stopSession(); await sb.auth.signOut(); location.reload(); }
+    return;
+  }
+  const n = prompt("Your name (shown when you scan keys in/out):", me()); if (n !== null) { localStorage[LS + "me"] = n.trim(); renderWho(); }
+};
+
+/* ---------- sign in (shared mode) ---------- */
+function viewLogin(msg) {
+  setNav("");
+  document.querySelector("nav").style.display = "none";
+  let pick = localStorage[LS + "lastUser"] || PEOPLE[0];
+  $("#app").innerHTML = `
+    <h1>Sign in</h1>
+    <form class="card" id="login">
+      <h2 style="margin-top:0">Who are you?</h2>
+      <div class="seg" id="people">${PEOPLE.map(p => `<button type="button" data-p="${p}" class="${p === pick ? "on" : ""}">${p}</button>`).join("")}</div>
+      <h2>Password</h2>
+      <input id="pw" type="password" autocomplete="current-password" required>
+      <button class="primary big" style="margin-top:16px" id="go">Sign in</button>
+      ${msg ? `<div class="notice" style="margin:12px 0 0">${esc(msg)}</div>` : ""}
+    </form>`;
+  document.querySelectorAll("[data-p]").forEach(b => b.onclick = () => {
+    pick = b.dataset.p; document.querySelectorAll("[data-p]").forEach(x => x.classList.toggle("on", x === b));
+  });
+  $("#login").onsubmit = async ev => {
+    ev.preventDefault();
+    $("#go").disabled = true; $("#go").textContent = "Signing in…";
+    const { error } = await sb.auth.signInWithPassword({ email: emailFor(pick), password: $("#pw").value });
+    if (error) { viewLogin("Wrong password — try again."); return; }
+    localStorage[LS + "lastUser"] = pick;
+    start();
+  };
+}
+
+/* ---------- live updates ---------- */
+let liveTimer = null, liveChannel = null;
+function goLive() {
+  if (!sb || liveChannel) return;
+  liveChannel = sb.channel("items-live")
+    .on("postgres_changes", { event: "*", schema: "public", table: "items" }, () => {
+      clearTimeout(liveTimer);
+      liveTimer = setTimeout(refresh, 400);
+    })
+    .subscribe();
+}
+async function refresh() {
+  try { await load(); } catch { return; }
+  // don't redraw mid-scan or while someone is typing; the data is still updated underneath
+  const typing = document.activeElement && ["INPUT", "SELECT"].includes(document.activeElement.tagName);
+  if (session || typing || document.querySelector("#reg .panel")) return;
+  const y = window.scrollY; render(); window.scrollTo(0, y);
+}
+
+function nfcNotice() {
+  return NFC ? "" : `<div class="notice">Scanning needs <b>Chrome on an Android phone</b>. On this device you can still view vehicles, and tapping a registered tag opens its page.</div>`;
+}
+
+function viewHome() {
+  setNav("home");
+  $("#app").innerHTML = `
+    ${nfcNotice()}
+    <h1>Vehicles</h1>
+    <form class="card" id="addv">
+      <div class="row" style="margin-bottom:8px">
+        <input id="vname" placeholder="Name, e.g. Vehicle 1" required>
+      </div>
+      <div class="row">
+        <input id="vrm" placeholder="VRM, e.g. AB12 CDE" required style="text-transform:uppercase">
+        <button class="primary">Add</button>
+      </div>
+    </form>
+    <div id="reg"></div>
+    <div id="list">${db.vehicles.length ? db.vehicles.map(v => {
+      const ks = keysFor(v.id);
+      return `<div class="card">
+        <div class="row">
+          <a class="vlink grow" href="#/v/${v.id}">
+            <div style="font-weight:700">${esc(v.name)}</div>
+            <div style="margin-top:4px"><span class="plate">${esc(v.vrm)}</span>
+              <span class="muted">· ${ks.length} key${ks.length === 1 ? "" : "s"} registered</span></div>
+          </a>
+          ${NFC ? `<button data-reg="${v.id}">Register keys</button>` : ""}
+        </div>
+      </div>`;
+    }).join("") : `<div class="empty">No vehicles yet — add one above.</div>`}</div>`;
+  $("#vname").value = `Vehicle ${db.vehicles.length + 1}`;
+  $("#addv").onsubmit = async ev => {
+    ev.preventDefault();
+    const v = { id: rid("v_"), name: $("#vname").value.trim(), vrm: $("#vrm").value.trim().toUpperCase(), at: Date.now() };
+    try { await store.put("vehicles", v); db.vehicles.push(v); viewHome(); toast(`${v.name} added`); }
+    catch (e) { toast("Couldn't save: " + e.message); }
+  };
+  document.querySelectorAll("[data-reg]").forEach(b => b.onclick = () => registerPanel($("#reg"), vehicle(b.dataset.reg)));
+}
+
+function viewVehicle(vid) {
+  setNav("");
+  const v = vehicle(vid);
+  if (!v) { $("#app").innerHTML = `<div class="empty">This tag isn't linked to a vehicle any more.<br><br><a href="#/">Back to vehicles</a></div>`; return; }
+  const ks = keysFor(vid);
+  const hist = db.events.filter(e => e.vehicleId === vid).sort((a, b) => b.at - a.at).slice(0, 50);
+  $("#app").innerHTML = `
+    <a href="#/" class="muted" style="text-decoration:none">← Vehicles</a>
+    <h1 style="margin-top:10px">${esc(v.name)}</h1>
+    <div><span class="plate" style="font-size:22px;padding:4px 12px">${esc(v.vrm)}</span></div>
+    <h2>Keys</h2>
+    ${ks.length ? ks.map(k => `<div class="card row">
+        <div class="grow"><div style="font-weight:600">Key ${k.n}</div><div style="margin-top:4px">${keyStatus(k)}</div></div>
+        <button class="danger" data-rel="${k.id}">Release</button>
+      </div>`).join("") : `<div class="card muted">No keys registered yet.</div>`}
+    ${NFC ? `<button class="primary big" id="regbtn" style="margin-top:6px">Register keys</button>` : ""}
+    <div id="reg"></div>
+    <h2>History</h2>
+    <div class="card hist">${hist.length ? `<ul>${hist.map(e => {
+      const k = db.keys.find(x => x.id === e.keyId);
+      return `<li>${describe(e, "key " + (k ? k.n : "?"))}<br><span class="muted">${when(e.at)}</span></li>`;
+    }).join("")}</ul>` : `<span class="muted">Nothing yet.</span>`}</div>
+    <button class="danger" id="delv" style="margin-top:24px">Delete vehicle</button>`;
+  if (NFC) $("#regbtn").onclick = () => registerPanel($("#reg"), v);
+  document.querySelectorAll("[data-rel]").forEach(b => b.onclick = async () => {
+    if (!confirm("Release this key? Its sticker can then be registered to another vehicle.")) return;
+    await store.del("keys", b.dataset.rel); db.keys = db.keys.filter(k => k.id !== b.dataset.rel); viewVehicle(vid);
+  });
+  $("#delv").onclick = async () => {
+    if (!confirm(`Delete ${v.name} and release its keys?`)) return;
+    for (const k of keysFor(vid)) await store.del("keys", k.id);
+    await store.del("vehicles", vid);
+    db.keys = db.keys.filter(k => k.vehicleId !== vid); db.vehicles = db.vehicles.filter(x => x.id !== vid);
+    location.hash = "#/";
+  };
+}
+
+/* ---------- register keys ---------- */
+function registerPanel(host, v) {
+  stopSession();
+  let count = 3;
+  host.innerHTML = `<div class="panel">
+    <div style="font-weight:700">Register keys for ${esc(vlabel(v))}</div>
+    <p class="muted" style="margin:6px 0 12px">How many key tags?</p>
+    <div class="stepper"><button id="m">−</button><div class="big-count" id="c">3</div><button id="p">+</button>
+      <button class="primary grow" id="go">Start</button></div>
+    <div style="text-align:right;margin-top:8px"><button class="danger" id="x" style="color:var(--muted)">Cancel</button></div>
+  </div>`;
+  host.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  $("#m").onclick = () => { count = Math.max(1, count - 1); $("#c").textContent = count; };
+  $("#p").onclick = () => { count = Math.min(10, count + 1); $("#c").textContent = count; };
+  $("#x").onclick = () => { host.innerHTML = ""; };
+  $("#go").onclick = () => runRegister(host, v, count);
+}
+
+async function runRegister(host, v, count) {
+  let done = 0, busy = false;
+  const recent = new Map();
+  host.innerHTML = `<div class="panel">
+    <div class="row"><div class="grow" style="font-weight:700">Tap each tag on the back of your phone</div>
+      <button id="stop">Done</button></div>
+    <div style="margin-top:10px"><span class="big-count" id="n">0</span> <span class="muted">of ${count} registered</span></div>
+    <div class="dots">${Array.from({ length: count }, () => "<span></span>").join("")}</div>
+    <ul class="log" id="log"></ul></div>`;
+  const log = (msg, cls) => { $("#log").insertAdjacentHTML("afterbegin", `<li class="${cls}">${esc(msg)}</li>`); buzz(cls === "good"); };
+  const finish = () => {
+    stopSession();
+    const btn = $("#stop"); if (btn) { btn.textContent = "Close"; btn.onclick = () => route(); }
+    log(done >= count ? `All ${count} of ${count} registered ✓` : `${done} of ${count} registered`, done >= count ? "good" : "warn");
+  };
+  $("#stop").onclick = finish;
+
+  const ctrl = new AbortController(); session = ctrl;
+  const reader = new NDEFReader();
+  try { await reader.scan({ signal: ctrl.signal }); }
+  catch (e) { log("Couldn't start NFC: " + e.message + " — is NFC switched on?", "bad"); return; }
+
+  reader.onreadingerror = () => log("Couldn't read that tag — try again", "bad");
+  reader.onreading = async e => {
+    const t = readTag(e);
+    const tagKey = t.serial || t.url;
+    if (busy || (tagKey && Date.now() - (recent.get(tagKey) || 0) < 3000)) return;   // ignore the same tag bouncing
+    busy = true; recent.set(tagKey, Date.now());
+    try {
+      if (t.key && t.key.vehicleId === v.id) log(`Already registered as key ${t.key.n} — skipped`, "warn");
+      else if (t.key) log(`Belongs to ${vlabel(vehicle(t.key.vehicleId))} — not registered. Release it there first.`, "bad");
+      else {
+        const k = { id: rid("k_"), serial: t.serial, vehicleId: v.id, n: (keysFor(v.id).at(-1)?.n || 0) + 1, at: Date.now() };
+        await reader.write({ records: [{ recordType: "url", data: tagUrl(v.id, k.id) }] }, { signal: ctrl.signal });
+        await store.put("keys", k); db.keys.push(k);
+        done++;
+        $("#n").textContent = done;
+        document.querySelectorAll(".dots span").forEach((s, i) => s.classList.toggle("on", i < done));
+        log(`Key ${k.n} registered`, "good");
+        if (done >= count) finish();
+      }
+    } catch (err) {
+      if (err.name !== "AbortError") log("Not registered — hold the tag still and try again", "bad");
+      recent.delete(tagKey);
+    } finally { setTimeout(() => busy = false, 800); }
+  };
+}
+
+/* ---------- scan in / out ---------- */
+let scanMode = "out", scanLoc = null, handTo = null;
+function viewScan() {
+  setNav("scan");
+  stopSession();
+  scanLoc = scanLoc && db.locations.find(l => l.name === scanLoc) ? scanLoc : db.locations[0]?.name;
+  $("#app").innerHTML = `
+    ${nfcNotice()}
+    <h1>Scan keys in / out</h1>
+    <div class="seg" id="mode">
+      <button data-m="out" class="${scanMode === "out" ? "on" : ""}">Taking out</button>
+      <button data-m="in" class="${scanMode === "in" ? "on" : ""}">Putting back</button>
+      <button data-m="handover" class="${scanMode === "handover" ? "on" : ""}">Hand over</button>
+    </div>
+    ${scanMode === "handover" ? `
+    <h2>Hand to</h2>
+    <div class="chips">${PEOPLE.filter(p => p !== me()).map(p => `<button data-to="${p}" class="${p === handTo ? "on" : ""}">${p}</button>`).join("")}</div>` : `
+    <h2 id="loclabel">${scanMode === "out" ? "From" : "Into"}</h2>
+    <div class="chips" id="locs">${db.locations.map(l => `<button data-l="${esc(l.name)}" class="${l.name === scanLoc ? "on" : ""}">${esc(l.name)}</button>`).join("")}
+      <button id="addloc">+ Add</button></div>`}
+    <h2>Who</h2>
+    ${sb ? `<div class="card" style="margin:0">Scanning as <b>${esc(me())}</b></div><input id="me" type="hidden" value="${esc(me())}">`
+         : `<input id="me" placeholder="Your name" value="${esc(me())}">`}
+    <div style="margin-top:18px">${NFC ? `<button class="primary big" id="scan">Start scanning</button>` : ""}</div>
+    <div id="scanpanel"></div>`;
+  document.querySelectorAll("[data-m]").forEach(b => b.onclick = () => { scanMode = b.dataset.m; viewScan(); });
+  document.querySelectorAll("[data-l]").forEach(b => b.onclick = () => { scanLoc = b.dataset.l; viewScan(); });
+  document.querySelectorAll("[data-to]").forEach(b => b.onclick = () => { handTo = b.dataset.to; viewScan(); });
+  if ($("#addloc")) $("#addloc").onclick = async () => {
+    const n = (prompt("New location name, e.g. Key place 5") || "").trim(); if (!n) return;
+    const l = { id: rid("l_"), name: n, order: db.locations.length }; await store.put("locations", l); db.locations.push(l); scanLoc = n; viewScan();
+  };
+  if ($("#me").type !== "hidden") $("#me").onchange = () => { localStorage[LS + "me"] = $("#me").value.trim(); renderWho(); };
+  if (NFC) $("#scan").onclick = runScan;
+}
+
+async function runScan() {
+  const person = $("#me").value.trim();
+  if (!person) { toast("Add your name first"); $("#me").focus(); return; }
+  localStorage[LS + "me"] = person; renderWho();
+  const mode = scanMode;
+  if (mode === "handover" && (!handTo || handTo === person)) { toast("Pick who you're handing to"); return; }
+  if (mode !== "handover" && !scanLoc) { toast("Pick a location"); return; }
+  const loc = mode === "handover" ? "" : scanLoc, to = mode === "handover" ? handTo : "";
+  const recent = new Map();
+  $("#scan").style.display = "none";
+  $("#scanpanel").innerHTML = `<div class="panel">
+    <div class="row"><div class="grow"><b>${mode === "handover" ? "Handing to " + esc(to) : (mode === "out" ? "Taking out from " : "Putting back into ") + esc(loc)}</b><br><span class="muted">Tap key tags one after another</span></div>
+    <button id="stopscan">Stop</button></div><ul class="log" id="log"></ul></div>`;
+  const log = (msg, cls) => { $("#log").insertAdjacentHTML("afterbegin", `<li class="${cls}">${esc(msg)}</li>`); buzz(cls === "good"); };
+  $("#stopscan").onclick = () => { stopSession(); viewScan(); };
+
+  const ctrl = new AbortController(); session = ctrl;
+  const reader = new NDEFReader();
+  try { await reader.scan({ signal: ctrl.signal }); }
+  catch (e) { log("Couldn't start NFC: " + e.message + " — is NFC switched on?", "bad"); return; }
+  reader.onreadingerror = () => log("Couldn't read that tag — try again", "bad");
+  reader.onreading = async e => {
+    const t = readTag(e);
+    const tagKey = t.serial || t.url;
+    if (tagKey && Date.now() - (recent.get(tagKey) || 0) < 3000) return;
+    recent.set(tagKey, Date.now());
+    if (!t.key) { log("This tag isn't registered to a vehicle", "bad"); return; }
+    const v = vehicle(t.key.vehicleId);
+    const ev = { id: rid("e_"), keyId: t.key.id, vehicleId: t.key.vehicleId, action: mode, location: loc, to, person, at: Date.now() };
+    try {
+      await store.put("events", ev); db.events.push(ev);
+      const d = document.createElement("div"); d.innerHTML = describe(ev, `${vlabel(v)} key ${t.key.n}`);
+      log(d.textContent, "good");
+    } catch (err) { log("Couldn't save: " + err.message, "bad"); }
+  };
+}
+
+/* ---------- router ---------- */
+let ready = false;
+function render() {
+  const h = location.hash;
+  const m = h.match(/^#\/v\/([^/]+)/);
+  if (m) viewVehicle(m[1]);
+  else if (h.startsWith("#/scan")) viewScan();
+  else viewHome();
+}
+function route() { stopSession(); if (!ready) return; render(); window.scrollTo(0, 0); }
+window.addEventListener("hashchange", async () => { if (!ready) return; await load().catch(() => {}); route(); });
+window.addEventListener("pageshow", e => { if (e.persisted && ready) load().then(route); });
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && ready) refresh(); });
+
+async function start() {
+  if (sb) {
+    const { data } = await sb.auth.getSession();
+    const user = data.session?.user;
+    if (!user) { renderWho(); viewLogin(); return; }
+    signedInName = user.user_metadata?.name || user.email.split("@")[0];
+  }
+  document.querySelector("nav").style.display = "";
+  renderWho();
+  $("#app").innerHTML = `<div class="empty">Loading…</div>`;
+  try { await load(); } catch (e) { $("#app").innerHTML = `<div class="notice">Couldn't load data: ${esc(e.message)}</div>`; return; }
+  ready = true;
+  goLive();
+  route();
+}
+start();
+</script>
+</body>
+</html>
