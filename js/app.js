@@ -1213,10 +1213,12 @@ function vWeek() {
   if (!p) {
     return `<h1>My week</h1><div class="empty">No program running.</div>
       <button class="btn btn-primary" data-act="go" data-to="newprogram">New program</button>
-      <button class="btn btn-ghost" data-act="go" data-to="programs">Programs & Archive</button>`;
+      <button class="btn btn-ghost" data-act="go" data-to="programs">Programs & Archive</button>
+      <button class="linkbtn" data-act="askSignOut" style="align-self:center;color:var(--miss);font-weight:500">Log out</button>`;
   }
   const head = `<div class="stack4"><h1>My plan</h1><div class="small">${esc(p.name)} · ${esc(weekLabel(p))}</div></div>`;
-  const foot = `<button class="btn btn-ghost" data-act="go" data-to="programs">Programs</button>`;
+  const foot = `<button class="btn btn-ghost" data-act="go" data-to="programs">Programs</button>
+    <button class="linkbtn" data-act="askSignOut" style="align-self:center;color:var(--miss);font-weight:500">Log out</button>`;
   return head + `
     <div class="sub" style="margin-top:-8px">Your repeating week. Tap a day to see its exercises or change it, drag ⠿ onto another day to swap them for good.</div>
     <div class="stack" data-sortable="days" data-mode="swap">${DAYS.map((k, i) => {
@@ -2671,9 +2673,9 @@ const A = {
   askSignOut() {
     const unsaved = Sync.isDirty() && !S.demo;
     ui.ask = {
-      title: 'Sign out?',
+      title: 'Log out?',
       body: unsaved ? 'Some changes haven’t reached your Google Sheet yet and would be lost. Get online first if you can.' : 'Your data is safe in your Google Sheet. Sign in again with your code any time.',
-      yes: 'Sign out', act: 'signOut', id: '',
+      yes: 'Log out', act: 'signOut', id: '',
     };
     openSheet(sAsk);
   },
